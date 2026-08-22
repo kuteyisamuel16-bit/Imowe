@@ -107,3 +107,19 @@ class Material(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     study_space = relationship("StudySpace", back_populates="materials")
+class AIInteraction(Base):
+    """
+    A single message in an AI Tutor conversation. Each row is one turn
+    (student or tutor); study_space_id is null for general conversations
+    not tied to a specific course.
+    """
+    __tablename__ = "ai_interactions"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False)
+    study_space_id = Column(UUID(as_uuid=False), ForeignKey("study_spaces.id"), nullable=True)
+
+    role = Column(String(20), nullable=False)  # "user" or "assistant"
+    content = Column(Text, nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
