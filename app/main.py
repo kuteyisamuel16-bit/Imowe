@@ -31,3 +31,10 @@ app.include_router(materials.router)
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "imowe-api"}
+@app.get("/")
+def root():
+    return {
+        "message": "IMOWE API is running.",
+        "docs": "/docs",
+        "health": "/health",
+    }
