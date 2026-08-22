@@ -219,6 +219,44 @@
 
   footer{padding:40px 0; text-align:center; color:var(--ink-faint); font-size:12.5px; border-top:1px solid var(--border); margin-top:60px;}
 
+  /* ---------- AI Tutor chat ---------- */
+  .tutor-header{display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;}
+  .tutor-header h2{font-size:22px;}
+  .tutor-messages{
+    display:flex; flex-direction:column; gap:12px;
+    min-height:260px; max-height:56vh; overflow-y:auto;
+    padding:4px 2px 12px;
+  }
+  .tutor-bubble{
+    max-width:82%; padding:11px 15px; border-radius:16px; font-size:14px; line-height:1.5;
+    white-space:pre-wrap; word-break:break-word;
+  }
+  .tutor-bubble.user{
+    align-self:flex-end; background:var(--grad); color:#fff; border-bottom-right-radius:4px;
+  }
+  .tutor-bubble.assistant{
+    align-self:flex-start; background:var(--panel-raised); border:1px solid var(--border);
+    color:var(--ink); border-bottom-left-radius:4px;
+  }
+  .tutor-bubble.pending{color:var(--ink-faint); font-style:italic;}
+  .tutor-quick-actions{display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 14px;}
+  .tutor-chip{
+    background:var(--panel); border:1px solid var(--border); color:var(--ink-dim);
+    padding:7px 14px; border-radius:999px; font-size:12.5px; font-weight:500;
+  }
+  .tutor-chip:hover{border-color:var(--accent-blue,var(--blue)); color:var(--ink);}
+  .tutor-input-row{display:flex; gap:10px; align-items:center;}
+  .tutor-input-row input{
+    flex:1; background:var(--panel); border:1px solid var(--border); border-radius:999px;
+    padding:13px 18px; color:var(--ink); font-size:14px;
+  }
+  .tutor-input-row input:focus{border-color:var(--blue); outline:none;}
+  .tutor-send{
+    width:44px; height:44px; border-radius:50%; background:var(--grad); border:none;
+    color:#fff; font-size:16px; flex-shrink:0;
+  }
+  .tutor-send:disabled{opacity:0.6;}
+
   /* ---------- bottom tab bar (shown when logged in) ---------- */
   #bottomNav{
     display:none; position:fixed; bottom:0; left:0; right:0; z-index:100;
@@ -336,7 +374,7 @@
 
       <div class="quick-actions">
         <div class="quick-action" data-nav="learn"><div class="quick-icon">📖</div><span>Study Space</span></div>
-        <div class="quick-action" data-app-tab="ai-tutor"><div class="quick-icon">🤖</div><span>AI Tutor</span></div>
+        <div class="quick-action" data-app-tab="tutor"><div class="quick-icon">🤖</div><span>AI Tutor</span></div>
         <div class="quick-action" data-app-tab="record"><div class="quick-icon">🎙️</div><span>Record Lecture</span></div>
         <div class="quick-action" data-app-tab="meet"><div class="quick-icon">👥</div><span>Meet &amp; Study</span></div>
       </div>
@@ -382,7 +420,7 @@
       <div class="card">
         <div class="card-head"><h3>Study Tools</h3></div>
         <div class="quick-actions" style="grid-template-columns:repeat(4,1fr);">
-          <div class="quick-action" data-app-tab="ai-tutor"><div class="quick-icon">🤖</div><span>AI Tutor</span></div>
+          <div class="quick-action" data-app-tab="tutor"><div class="quick-icon">🤖</div><span>AI Tutor</span></div>
           <div class="quick-action"><div class="quick-icon">📝</div><span>Summary</span></div>
           <div class="quick-action"><div class="quick-icon">❓</div><span>Quiz</span></div>
           <div class="quick-action"><div class="quick-icon">🗂️</div><span>Flashcards</span></div>
@@ -445,6 +483,26 @@
         <button class="profile-menu-item"><span>ℹ️</span><span>About IMOWE</span><span class="profile-menu-arrow">›</span></button>
         <button class="profile-menu-item" id="profileLogoutBtn"><span>🚪</span><span>Log out</span><span class="profile-menu-arrow">›</span></button>
       </div>
+    </div>
+
+    <!-- AI TUTOR -->
+    <div class="subview" id="app-tutor">
+      <div class="tutor-header">
+        <h2>AI Tutor</h2>
+        <button class="btn-cancel" id="tutorNewChat" style="width:auto; padding:8px 16px;">New Chat</button>
+      </div>
+      <div class="tutor-messages" id="tutorMessages">
+        <p class="muted" id="tutorEmptyState">Ask me anything about your courses — or just say hi.</p>
+      </div>
+      <div class="tutor-quick-actions">
+        <button class="tutor-chip" data-quick="Summarize what we just discussed.">Summarize this</button>
+        <button class="tutor-chip" data-quick="Give me a few examples to help me understand.">Give me examples</button>
+        <button class="tutor-chip" data-quick="Quiz me on this topic.">Quiz me</button>
+      </div>
+      <form class="tutor-input-row" id="tutorForm">
+        <input type="text" id="tutorInput" placeholder="Ask anything..." autocomplete="off">
+        <button type="submit" class="tutor-send" aria-label="Send">➤</button>
+      </form>
     </div>
 
     <!-- COMING SOON PLACEHOLDER -->
@@ -542,6 +600,8 @@ const api = {
   listStudySpaces: (statusFilter) => apiRequest(`/study-spaces${statusFilter ? `?status_filter=${statusFilter}` : ''}`),
   addCourse: (title, subtitle) => apiRequest('/study-spaces', { method:'POST', body:{ title, subtitle } }),
   getStudySpace: (id) => apiRequest(`/study-spaces/${id}`),
+  tutorMessages: (studySpaceId) => apiRequest(`/ai-tutor/messages${studySpaceId ? `?study_space_id=${studySpaceId}` : ''}`),
+  tutorChat: (message, studySpaceId) => apiRequest('/ai-tutor/chat', { method:'POST', body:{ message, study_space_id: studySpaceId || null } }),
 };
 
 /* =========================================================
@@ -576,6 +636,7 @@ function showAppTab(tab, options = {}){
   if (tab === 'learn') loadCourseList(currentFilter);
   if (tab === 'analytics') loadAnalyticsHeader();
   if (tab === 'profile') loadProfile();
+  if (tab === 'tutor') loadTutorMessages();
   if (tab === 'soon'){
     document.getElementById('soonTitle').textContent = options.title || 'Coming soon';
     document.getElementById('soonNote').textContent = options.note || '';
@@ -583,7 +644,7 @@ function showAppTab(tab, options = {}){
 }
 
 function goTo(name){
-  const appTabs = ['home','learn','course','analytics','profile'];
+  const appTabs = ['home','learn','course','analytics','profile','tutor'];
   if (appTabs.includes(name)){
     if (!currentUser){ openAuthModal('login'); return; }
     showView('app');
@@ -620,11 +681,10 @@ document.addEventListener('click', (e) => {
   if (tabBtn){
     e.preventDefault();
     const tab = tabBtn.dataset.appTab;
-    const knownTabs = ['home','learn','analytics','profile'];
+    const knownTabs = ['home','learn','analytics','profile','tutor'];
     if (knownTabs.includes(tab)) goTo(tab);
     else {
       const notes = {
-        'ai-tutor': "Coming in the Learning Core stage — chat grounded in your course materials and lectures.",
         'record': "Coming in the Lecture & Media stage — recording, transcription and timestamps.",
         'meet': "Coming in the Collaboration stage — study meetings with classmates.",
         'library': "Coming in the Learning Core stage — all materials, lectures and notes in one searchable place.",
@@ -876,6 +936,80 @@ function loadProfile(){
   const programme = currentUser.academic_profile?.programme;
   document.getElementById('profileProgramme').textContent = programme || 'Add your programme in Academic Profile';
 }
+
+/* =========================================================
+   AI TUTOR
+   General conversation only for now (no study_space_id) — course-specific
+   chat can reuse renderTutorMessages/sendTutorMessage once wired from a
+   course page.
+   ========================================================= */
+function renderTutorBubble(role, content){
+  const container = document.getElementById('tutorMessages');
+  const emptyState = document.getElementById('tutorEmptyState');
+  if (emptyState) emptyState.remove();
+  const bubble = document.createElement('div');
+  bubble.className = `tutor-bubble ${role === 'user' ? 'user' : 'assistant'}`;
+  bubble.textContent = content;
+  container.appendChild(bubble);
+  container.scrollTop = container.scrollHeight;
+  return bubble;
+}
+
+async function loadTutorMessages(){
+  const container = document.getElementById('tutorMessages');
+  container.innerHTML = '<p class="muted">Loading…</p>';
+  try{
+    const messages = await api.tutorMessages(null);
+    container.innerHTML = '';
+    if (!messages.length){
+      container.innerHTML = '<p class="muted" id="tutorEmptyState">Ask me anything about your courses — or just say hi.</p>';
+      return;
+    }
+    messages.forEach(m => renderTutorBubble(m.role, m.content));
+  }catch{
+    container.innerHTML = '<p class="muted">Could not load the conversation.</p>';
+  }
+}
+
+async function sendTutorMessage(text){
+  if (!text.trim()) return;
+  renderTutorBubble('user', text);
+
+  const container = document.getElementById('tutorMessages');
+  const pending = document.createElement('div');
+  pending.className = 'tutor-bubble assistant pending';
+  pending.textContent = 'Thinking…';
+  container.appendChild(pending);
+  container.scrollTop = container.scrollHeight;
+
+  try{
+    const reply = await api.tutorChat(text, null);
+    pending.remove();
+    renderTutorBubble('assistant', reply.content);
+  }catch(err){
+    pending.remove();
+    renderTutorBubble('assistant', `Sorry, something went wrong: ${err.message}`);
+  }
+}
+
+document.getElementById('tutorForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const input = document.getElementById('tutorInput');
+  const text = input.value;
+  input.value = '';
+  sendTutorMessage(text);
+});
+
+document.querySelectorAll('.tutor-chip').forEach(chip => {
+  chip.addEventListener('click', () => sendTutorMessage(chip.dataset.quick));
+});
+
+document.getElementById('tutorNewChat').addEventListener('click', () => {
+  document.getElementById('tutorMessages').innerHTML =
+    '<p class="muted" id="tutorEmptyState">Ask me anything about your courses — or just say hi.</p>';
+  // Note: this only clears the view — history is still saved server-side
+  // until a dedicated "clear conversation" endpoint exists.
+});
 
 /* =========================================================
    UTIL
