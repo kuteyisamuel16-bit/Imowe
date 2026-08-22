@@ -2,3 +2,15 @@
 name = "imowe-backend"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi[standard]==0.115.0",
+    "sqlalchemy==2.0.35",
+    "psycopg[binary]==3.2.3",
+    "python-jose[cryptography]==3.3.0",
+    "passlib[bcrypt]==1.7.4",
+    "python-multipart==0.0.9",
+    "pydantic[email]==2.9.2",
+    "pydantic-settings==2.5.2",
+    "alembic==1.13.2",
+    "python-dotenv==1.0.1",
+]
