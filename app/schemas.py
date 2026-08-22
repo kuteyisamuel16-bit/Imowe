@@ -84,3 +84,17 @@ class MaterialOut(BaseModel):
     content_type: Optional[str] = None
     status: str
     created_at: datetime
+# ---------- AI Tutor ----------
+
+class ChatMessageIn(BaseModel):
+    message: str
+    study_space_id: Optional[str] = None
+
+
+class ChatMessageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    role: str
+    content: str
+    created_at: datetime
