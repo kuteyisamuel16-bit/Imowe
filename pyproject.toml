@@ -15,3 +15,4 @@ dependencies = [
     "alembic==1.13.2",
     "python-dotenv==1.0.1",
 ]
+"google-genai>=1.0.0",
