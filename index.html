@@ -873,6 +873,7 @@ function escapeHtml(str){
     await refreshCurrentUser();
     if (currentUser) { goTo('home'); return; }
   }
+  updateNavForAuth();
   showView('landing');
 })();
 </script>
