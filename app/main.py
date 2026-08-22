@@ -3,8 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import Base, engine
 from app.config import settings
-from app.routers import auth, users, courses, study_spaces, materials
-
+from app.routers import auth, users, courses, study_spaces, materials, ai_tutor
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
