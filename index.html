@@ -396,26 +396,36 @@
     <!-- ANALYTICS -->
     <div class="subview" id="app-analytics">
       <h2>Analytics</h2>
-      <div class="hero-stat">
-        <div><span>Overall Performance</span><strong>Good</strong><p>You're in the top 25% of IMOWE users</p></div>
-        <div class="hero-ring">B+</div>
+
+      <div id="analyticsEmpty" style="display:none;">
+        <div class="card" style="text-align:center; padding:48px 24px;">
+          <h3 style="margin-bottom:10px;">No analytics yet</h3>
+          <p class="muted">Add a course and start studying — your performance, strengths, and study time will show up here.</p>
+        </div>
       </div>
-      <div class="stat-grid">
-        <div class="stat-box"><span>Courses</span><strong id="statCourses">–</strong></div>
-        <div class="stat-box"><span>Avg. Score</span><strong>78%</strong></div>
-        <div class="stat-box"><span>Study Time</span><strong>32h 45m</strong></div>
+
+      <div id="analyticsContent" style="display:none;">
+        <div class="hero-stat">
+          <div><span>Overall Performance</span><strong>Good</strong><p>You're in the top 25% of IMOWE users</p></div>
+          <div class="hero-ring">B+</div>
+        </div>
+        <div class="stat-grid">
+          <div class="stat-box"><span>Courses</span><strong id="statCourses">–</strong></div>
+          <div class="stat-box"><span>Avg. Score</span><strong>78%</strong></div>
+          <div class="stat-box"><span>Study Time</span><strong>32h 45m</strong></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Strengths</h3></div>
+          <div class="bar-row"><span>Media Theories</span><div class="progress-track"><div class="progress-fill good" style="width:92%"></div></div><span>92%</span></div>
+          <div class="bar-row"><span>Research Methods</span><div class="progress-track"><div class="progress-fill good" style="width:85%"></div></div><span>85%</span></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Needs Improvement</h3></div>
+          <div class="bar-row"><span>Statistics</span><div class="progress-track"><div class="progress-fill warn" style="width:62%"></div></div><span>62%</span></div>
+          <div class="bar-row"><span>Sampling Techniques</span><div class="progress-track"><div class="progress-fill warn" style="width:58%"></div></div><span>58%</span></div>
+        </div>
+        <p class="muted" style="margin-top:12px;">Strengths/weaknesses shown here are placeholder data until the Academic Intelligence stage is connected.</p>
       </div>
-      <div class="card">
-        <div class="card-head"><h3>Strengths</h3></div>
-        <div class="bar-row"><span>Media Theories</span><div class="progress-track"><div class="progress-fill good" style="width:92%"></div></div><span>92%</span></div>
-        <div class="bar-row"><span>Research Methods</span><div class="progress-track"><div class="progress-fill good" style="width:85%"></div></div><span>85%</span></div>
-      </div>
-      <div class="card">
-        <div class="card-head"><h3>Needs Improvement</h3></div>
-        <div class="bar-row"><span>Statistics</span><div class="progress-track"><div class="progress-fill warn" style="width:62%"></div></div><span>62%</span></div>
-        <div class="bar-row"><span>Sampling Techniques</span><div class="progress-track"><div class="progress-fill warn" style="width:58%"></div></div><span>58%</span></div>
-      </div>
-      <p class="muted" style="margin-top:12px;">Strengths/weaknesses shown here are placeholder data until the Academic Intelligence stage is connected.</p>
     </div>
 
     <!-- PROFILE -->
@@ -837,11 +847,21 @@ document.getElementById('addCourseForm').addEventListener('submit', async (e) =>
    the Academic Intelligence stage is connected)
    ========================================================= */
 async function loadAnalyticsHeader(){
+  const emptyEl = document.getElementById('analyticsEmpty');
+  const contentEl = document.getElementById('analyticsContent');
   try{
     const spaces = await api.listStudySpaces();
-    document.getElementById('statCourses').textContent = spaces.length;
+    if (spaces.length === 0){
+      emptyEl.style.display = 'block';
+      contentEl.style.display = 'none';
+    } else {
+      emptyEl.style.display = 'none';
+      contentEl.style.display = 'block';
+      document.getElementById('statCourses').textContent = spaces.length;
+    }
   }catch{
-    document.getElementById('statCourses').textContent = '–';
+    emptyEl.style.display = 'block';
+    contentEl.style.display = 'none';
   }
 }
 
