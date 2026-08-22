@@ -14,5 +14,5 @@ class Settings(BaseSettings):
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
 
-
+    GEMINI_API_KEY: str = ""  # AI Tutor is disabled until this is set
 settings = Settings()
