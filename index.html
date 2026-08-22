@@ -118,8 +118,9 @@
   }
 
   /* ---------- AUTH ---------- */
-  #view-signup, #view-login{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:40px 24px 60px;}
-  .auth-card{width:100%; max-width:420px; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:40px 36px;}
+  .auth-card{width:100%; max-width:420px; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:40px 36px; position:relative;}
+  .modal-close{position:absolute; top:16px; right:16px; background:transparent; border:none; color:var(--ink-dim); font-size:16px; width:32px; height:32px; border-radius:50%;}
+  .modal-close:hover{background:var(--surface); color:var(--ink);}
   .auth-logo-row{display:flex; align-items:center; gap:10px; margin-bottom:26px;}
   .auth-logo-row img{width:38px; height:38px; border-radius:9px;}
   .auth-logo-row span{font-family:'Sora',sans-serif; font-weight:700; font-size:19px;}
@@ -285,9 +286,10 @@
   </div>
 </section>
 
-<!-- ============ SIGN UP ============ -->
-<section id="view-signup" class="subview">
-  <div class="auth-card">
+<!-- ============ SIGN UP (modal) ============ -->
+<div class="modal-backdrop" id="signupModal">
+  <div class="modal auth-card">
+    <button type="button" class="modal-close" id="signupClose" aria-label="Close">✕</button>
     <div class="auth-logo-row"><img src="logo.png" alt="IMOWE"><span>IMOWE</span></div>
     <h2>Create your IMOWE account</h2>
     <p class="subtitle">Join thousands of students learning smarter every day.</p>
@@ -299,13 +301,14 @@
       <div class="field"><label>Confirm Password</label><input type="password" id="suConfirm" required placeholder="Confirm your password"></div>
       <button type="submit" class="btn btn-primary btn-block" id="signupSubmit">Create Account</button>
     </form>
-    <p class="auth-switch">Already have an account? <button data-nav="login">Log in</button></p>
+    <p class="auth-switch">Already have an account? <button type="button" data-nav="login">Log in</button></p>
   </div>
-</section>
+</div>
 
-<!-- ============ LOG IN ============ -->
-<section id="view-login" class="subview">
-  <div class="auth-card">
+<!-- ============ LOG IN (modal) ============ -->
+<div class="modal-backdrop" id="loginModal">
+  <div class="modal auth-card">
+    <button type="button" class="modal-close" id="loginClose" aria-label="Close">✕</button>
     <div class="auth-logo-row"><img src="logo.png" alt="IMOWE"><span>IMOWE</span></div>
     <h2>Welcome back</h2>
     <p class="subtitle">Log in to keep your progress moving.</p>
@@ -315,9 +318,9 @@
       <div class="field"><label>Password</label><input type="password" id="liPassword" required placeholder="Enter your password"></div>
       <button type="submit" class="btn btn-primary btn-block" id="loginSubmit">Log In</button>
     </form>
-    <p class="auth-switch">New to IMOWE? <button data-nav="signup">Create an account</button></p>
+    <p class="auth-switch">New to IMOWE? <button type="button" data-nav="signup">Create an account</button></p>
   </div>
-</section>
+</div>
 
 <!-- ============ APP (post-login) ============ -->
 <section id="view-app" class="subview">
@@ -571,7 +574,7 @@ function showAppTab(tab, options = {}){
 function goTo(name){
   const appTabs = ['home','learn','course','analytics','profile'];
   if (appTabs.includes(name)){
-    if (!currentUser){ showView('login'); return; }
+    if (!currentUser){ openAuthModal('login'); return; }
     showView('app');
     showAppTab(name);
     return;
@@ -579,10 +582,28 @@ function goTo(name){
   showView(name);
 }
 
+/* Signup/Login are pop-up modals over whatever page is behind them,
+   not separate full-page views. */
+function openAuthModal(type){
+  document.getElementById('signupModal').classList.remove('show');
+  document.getElementById('loginModal').classList.remove('show');
+  document.getElementById(`${type}Modal`).classList.add('show');
+}
+function closeAuthModals(){
+  document.getElementById('signupModal').classList.remove('show');
+  document.getElementById('loginModal').classList.remove('show');
+}
+
 /* Handle all data-nav / data-app-tab clicks in one place */
 document.addEventListener('click', (e) => {
   const navBtn = e.target.closest('[data-nav]');
-  if (navBtn){ e.preventDefault(); goTo(navBtn.dataset.nav); return; }
+  if (navBtn){
+    e.preventDefault();
+    const target = navBtn.dataset.nav;
+    if (target === 'signup' || target === 'login'){ openAuthModal(target); return; }
+    goTo(target);
+    return;
+  }
 
   const tabBtn = e.target.closest('[data-app-tab]');
   if (tabBtn){
@@ -644,6 +665,7 @@ document.getElementById('signupForm').addEventListener('submit', async (e) => {
     );
     setToken(access_token);
     await refreshCurrentUser();
+    closeAuthModals();
     goTo('home');
   }catch(err){
     errorBox.textContent = err.message;
@@ -651,6 +673,11 @@ document.getElementById('signupForm').addEventListener('submit', async (e) => {
   }finally{
     submitBtn.disabled = false; submitBtn.textContent = 'Create Account';
   }
+});
+
+document.getElementById('signupClose').addEventListener('click', closeAuthModals);
+document.getElementById('signupModal').addEventListener('click', (e) => {
+  if (e.target.id === 'signupModal') closeAuthModals();
 });
 
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
@@ -667,6 +694,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     );
     setToken(access_token);
     await refreshCurrentUser();
+    closeAuthModals();
     goTo('home');
   }catch(err){
     errorBox.textContent = err.message;
@@ -674,6 +702,11 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   }finally{
     submitBtn.disabled = false; submitBtn.textContent = 'Log In';
   }
+});
+
+document.getElementById('loginClose').addEventListener('click', closeAuthModals);
+document.getElementById('loginModal').addEventListener('click', (e) => {
+  if (e.target.id === 'loginModal') closeAuthModals();
 });
 
 document.getElementById('profileLogoutBtn').addEventListener('click', () => {
