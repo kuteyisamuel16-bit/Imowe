@@ -162,7 +162,8 @@
   .quick-action{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md); padding:18px 10px;
     display:flex; flex-direction:column; align-items:center; gap:10px; font-size:12.5px; font-weight:500; color:var(--ink-dim); text-align:center;}
   .quick-action:hover{border-color:var(--blue); color:var(--ink); transform:translateY(-2px);}
-  .quick-icon{width:46px; height:46px; border-radius:14px; background:var(--grad); display:flex; align-items:center; justify-content:center; font-size:20px;}
+  .quick-icon{width:46px; height:46px; border-radius:14px; background:var(--grad); display:flex; align-items:center; justify-content:center; font-size:20px; overflow:hidden;}
+  .quick-icon-img{width:100%; height:100%; object-fit:cover;}
 
   .progress-track{width:100%; height:6px; background:rgba(255,255,255,0.08); border-radius:999px; overflow:hidden; margin-top:6px;}
   .progress-fill{height:100%; background:var(--grad); border-radius:999px;}
@@ -245,17 +246,20 @@
     padding:7px 14px; border-radius:999px; font-size:12.5px; font-weight:500;
   }
   .tutor-chip:hover{border-color:var(--accent-blue,var(--blue)); color:var(--ink);}
-  .tutor-input-row{display:flex; gap:10px; align-items:center;}
+  .tutor-input-row{position:relative; display:flex; align-items:center;}
   .tutor-input-row input{
-    flex:1; background:var(--panel); border:1px solid var(--border); border-radius:999px;
-    padding:13px 18px; color:var(--ink); font-size:14px;
+    width:100%; background:var(--panel); border:1px solid var(--border); border-radius:999px;
+    padding:14px 56px 14px 20px; color:var(--ink); font-size:14px;
   }
   .tutor-input-row input:focus{border-color:var(--blue); outline:none;}
   .tutor-send{
-    width:44px; height:44px; border-radius:50%; background:var(--grad); border:none;
-    color:#fff; font-size:16px; flex-shrink:0;
+    position:absolute; right:5px; top:50%; transform:translateY(-50%);
+    width:38px; height:38px; border-radius:50%; background:var(--grad); border:none;
+    color:#fff; display:flex; align-items:center; justify-content:center; flex-shrink:0;
   }
-  .tutor-send:disabled{opacity:0.6;}
+  .tutor-send svg{width:16px; height:16px;}
+  .tutor-send:hover{filter:brightness(1.08);}
+  .tutor-send:disabled{opacity:0.5; cursor:not-allowed;}
 
   /* ---------- bottom tab bar (shown when logged in) ---------- */
   #bottomNav{
@@ -374,7 +378,7 @@
 
       <div class="quick-actions">
         <div class="quick-action" data-nav="learn"><div class="quick-icon">📖</div><span>Study Space</span></div>
-        <div class="quick-action" data-app-tab="tutor"><div class="quick-icon">🤖</div><span>AI Tutor</span></div>
+        <div class="quick-action" data-app-tab="tutor"><div class="quick-icon"><img src="logo.png" alt="AI Tutor" class="quick-icon-img"></div><span>AI Tutor</span></div>
         <div class="quick-action" data-app-tab="record"><div class="quick-icon">🎙️</div><span>Record Lecture</span></div>
         <div class="quick-action" data-app-tab="meet"><div class="quick-icon">👥</div><span>Meet &amp; Study</span></div>
       </div>
@@ -420,7 +424,7 @@
       <div class="card">
         <div class="card-head"><h3>Study Tools</h3></div>
         <div class="quick-actions" style="grid-template-columns:repeat(4,1fr);">
-          <div class="quick-action" data-app-tab="tutor"><div class="quick-icon">🤖</div><span>AI Tutor</span></div>
+          <div class="quick-action" data-app-tab="tutor"><div class="quick-icon"><img src="logo.png" alt="AI Tutor" class="quick-icon-img"></div><span>AI Tutor</span></div>
           <div class="quick-action"><div class="quick-icon">📝</div><span>Summary</span></div>
           <div class="quick-action"><div class="quick-icon">❓</div><span>Quiz</span></div>
           <div class="quick-action"><div class="quick-icon">🗂️</div><span>Flashcards</span></div>
@@ -501,7 +505,9 @@
       </div>
       <form class="tutor-input-row" id="tutorForm">
         <input type="text" id="tutorInput" placeholder="Ask anything..." autocomplete="off">
-        <button type="submit" class="tutor-send" aria-label="Send">➤</button>
+        <button type="submit" class="tutor-send" aria-label="Send">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M4 12L20 4L14 20L11 13L4 12Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" fill="currentColor"/></svg>
+        </button>
       </form>
     </div>
 
