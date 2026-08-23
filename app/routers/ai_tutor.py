@@ -12,8 +12,10 @@ router = APIRouter(prefix="/ai-tutor", tags=["ai-tutor"])
 
 # If GEMINI_API_KEY isn't set, the client stays None and chat() returns a
 # clear 503 instead of crashing - lets the rest of the app run without it.
-client = genai.Client(api_key=settings.GEMINI_API_KEY) if settings.GEMINI_API_KEY else None
-
+client = genai.Client(
+    api_key=settings.GEMINI_API_KEY,
+    http_options=types.HttpOptions(timeout=20000),  # 20s, in ms - fail fast instead of hanging
+) if settings.GEMINI_API_KEY else None
 GEMINI_MODEL = "gemini-2.5-flash"
 
 SYSTEM_PROMPT_BASE = (
