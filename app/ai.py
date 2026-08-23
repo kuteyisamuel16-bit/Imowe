@@ -7,8 +7,10 @@ from google import genai
 from google.genai import types
 
 from app.config import settings
-
-client = genai.Client(api_key=settings.GEMINI_API_KEY) if settings.GEMINI_API_KEY else None
+client = genai.Client(
+    api_key=settings.GEMINI_API_KEY,
+    http_options=types.HttpOptions(timeout=20000),  # 20s, in ms - fail fast instead of hanging
+) if settings.GEMINI_API_KEY else None
 
 GEMINI_MODEL = "gemini-2.5-flash"
 
