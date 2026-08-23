@@ -21,12 +21,12 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
-app.include_router(quiz.router)
 app.include_router(users.router)
 app.include_router(courses.router)
 app.include_router(study_spaces.router)
 app.include_router(materials.router)
-
+app.include_router(ai_tutor.router)
+app.include_router(quiz.router)
 
 @app.get("/health")
 def health_check():
