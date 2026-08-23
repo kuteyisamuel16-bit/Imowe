@@ -65,3 +65,40 @@ def list_materials(
         .order_by(models.Material.created_at.desc())
         .all()
     )
+# ---------- Quiz ----------
+
+class QuizGenerateRequest(BaseModel):
+    num_questions: int = 5
+
+
+class QuizQuestionOut(BaseModel):
+    """Sent before submission - correct_index is deliberately left out."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    question_text: str
+    options: list[str]
+
+
+class QuizAnswerIn(BaseModel):
+    question_id: str
+    selected_index: int
+
+
+class QuizSubmitRequest(BaseModel):
+    answers: list[QuizAnswerIn]
+
+
+class QuizReviewItem(BaseModel):
+    question_id: str
+    question_text: str
+    options: list[str]
+    correct_index: int
+    selected_index: Optional[int] = None
+    is_correct: bool
+
+
+class QuizSubmitResult(BaseModel):
+    score: int
+    total: int
+    review: list[QuizReviewItem]
