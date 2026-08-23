@@ -1,4 +1,5 @@
 import os
+import json
 import shutil
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
@@ -6,10 +7,11 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import get_current_user
-from app import models, schemas
+from app import models, schemas, ai
 
 router = APIRouter(prefix="/study-spaces/{study_space_id}/materials", tags=["materials"])
 
+# Swap this for S3/GCS/Azure Blob storage before going to production.
 UPLOAD_DIR = "uploaded_materials"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -25,6 +27,22 @@ def _get_owned_study_space(study_space_id: str, db: Session, user: models.User) 
     return study_space
 
 
+def _extract_text(file_path: str, content_type: str | None) -> str:
+    """Best-effort text extraction. PDFs use pypdf; everything else is read as
+    plain text. Returns '' (not an error) if the file type isn't supported -
+    processing just quietly does nothing useful for that file."""
+    try:
+        if content_type == "application/pdf" or file_path.lower().endswith(".pdf"):
+            from pypdf import PdfReader
+            reader = PdfReader(file_path)
+            return "\n".join((page.extract_text() or "") for page in reader.pages)
+        else:
+            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                return f.read()
+    except Exception:
+        return ""
+
+
 @router.post("", response_model=schemas.MaterialOut, status_code=201)
 def upload_material(
     study_space_id: str,
@@ -32,6 +50,12 @@ def upload_material(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
+    """
+    Section 3 of the plan: 'Upload -> Process -> Course Memory -> Tutor/Audio/
+    Video/Practice.' Processing (text extraction + topic detection) runs
+    synchronously here for simplicity - for large files or heavy load, move
+    this into a background worker (e.g. Celery/RQ) instead.
+    """
     study_space = _get_owned_study_space(study_space_id, db, current_user)
 
     safe_name = f"{uuid.uuid4()}_{file.filename}"
@@ -44,11 +68,24 @@ def upload_material(
         filename=file.filename,
         file_path=destination,
         content_type=file.content_type,
-        status=models.MaterialStatus.uploaded,
+        status=models.MaterialStatus.processing,
     )
     db.add(material)
     db.commit()
     db.refresh(material)
+
+    # Process immediately (extract text -> topics). Never let this fail the
+    # upload itself - if it errors, the material still exists, just unprocessed.
+    try:
+        text = _extract_text(destination, file.content_type)
+        topics = ai.extract_topics(text)
+        material.extracted_topics = json.dumps(topics)
+        material.status = models.MaterialStatus.processed if topics else models.MaterialStatus.uploaded
+    except Exception:
+        material.status = models.MaterialStatus.failed
+    db.commit()
+    db.refresh(material)
+
     return material
 
 
@@ -58,6 +95,7 @@ def list_materials(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
+    """Screen 5 'Materials' tab."""
     study_space = _get_owned_study_space(study_space_id, db, current_user)
     return (
         db.query(models.Material)
@@ -65,40 +103,3 @@ def list_materials(
         .order_by(models.Material.created_at.desc())
         .all()
     )
-# ---------- Quiz ----------
-
-class QuizGenerateRequest(BaseModel):
-    num_questions: int = 5
-
-
-class QuizQuestionOut(BaseModel):
-    """Sent before submission - correct_index is deliberately left out."""
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    question_text: str
-    options: list[str]
-
-
-class QuizAnswerIn(BaseModel):
-    question_id: str
-    selected_index: int
-
-
-class QuizSubmitRequest(BaseModel):
-    answers: list[QuizAnswerIn]
-
-
-class QuizReviewItem(BaseModel):
-    question_id: str
-    question_text: str
-    options: list[str]
-    correct_index: int
-    selected_index: Optional[int] = None
-    is_correct: bool
-
-
-class QuizSubmitResult(BaseModel):
-    score: int
-    total: int
-    review: list[QuizReviewItem]
