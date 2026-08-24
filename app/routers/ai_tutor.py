@@ -10,11 +10,9 @@ from app.config import settings
 
 router = APIRouter(prefix="/ai-tutor", tags=["ai-tutor"])
 
-# If GEMINI_API_KEY isn't set, the client stays None and chat() returns a
-# clear 503 instead of crashing - lets the rest of the app run without it.
 client = genai.Client(
     api_key=settings.GEMINI_API_KEY,
-    http_options=types.HttpOptions(timeout=20000),  # 20s, in ms - fail fast instead of hanging
+    http_options=types.HttpOptions(timeout=20000),
 ) if settings.GEMINI_API_KEY else None
 
 GEMINI_MODEL = "gemini-2.5-flash"
@@ -44,12 +42,6 @@ async def chat(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """
-    Screen 7 - AI Tutor (Chat). Sends the student's message to Gemini, grounded
-    in the course context if a study_space_id is given, and stores both sides
-    of the conversation as AIInteraction rows (this is the 'evidence of
-    understanding' feed for the future Academic Intelligence stage).
-    """
     if not client:
         raise HTTPException(
             status_code=503,
@@ -75,7 +67,6 @@ async def chat(
     db.add(user_msg)
     db.commit()
 
-    # Pull the last 10 messages in this thread for conversational context.
     history = (
         db.query(models.AIInteraction)
         .filter(
@@ -88,7 +79,6 @@ async def chat(
     )
     history.reverse()
 
-    # Gemini uses role "model" for the assistant side, not "assistant".
     contents = [
         types.Content(
             role=("user" if m.role == "user" else "model"),
@@ -98,22 +88,14 @@ async def chat(
     ]
 
     try:
-        import asyncio
-
-try:
-    response = await asyncio.wait_for(
-        client.aio.models.generate_content(
+        response = await client.aio.models.generate_content(
             model=GEMINI_MODEL,
             contents=contents,
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
                 max_output_tokens=1000,
             ),
-        ),
-        timeout=15,
-    )
-except asyncio.TimeoutError:
-    raise HTTPException(status_code=504, detail="AI Tutor timed out reaching Gemini — check outbound network access from the server.")
+        )
         reply_text = response.text
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI Tutor request failed: {e}")
@@ -136,7 +118,6 @@ def get_messages(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """Loads the existing conversation when the AI Tutor screen opens."""
     query = (
         db.query(models.AIInteraction)
         .filter(
