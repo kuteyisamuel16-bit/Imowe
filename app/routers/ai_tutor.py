@@ -97,9 +97,14 @@ async def chat(
     ]
 
     try:
-        response = await client.aio.models.generate_content( =
-                                                                        
+        response = await client.aio.models.generate_content(
             model=GEMINI_MODEL,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                max_output_tokens=1000,
+            ),
+        )
             contents=contents,
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
