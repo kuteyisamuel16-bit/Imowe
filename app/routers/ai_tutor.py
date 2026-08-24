@@ -38,7 +38,7 @@ def _get_owned_study_space(study_space_id: str, db: Session, user: models.User) 
 
 
 @router.post("/chat", response_model=schemas.ChatMessageOut)
-def chat(
+async def chat(
     payload: schemas.ChatMessageIn,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
@@ -97,7 +97,8 @@ def chat(
     ]
 
     try:
-        response = client.models.generate_content(
+        response = await client.aio.models.generate_content( =
+                                                                        
             model=GEMINI_MODEL,
             contents=contents,
             config=types.GenerateContentConfig(
