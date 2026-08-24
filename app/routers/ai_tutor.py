@@ -16,6 +16,7 @@ client = genai.Client(
     api_key=settings.GEMINI_API_KEY,
     http_options=types.HttpOptions(timeout=20000),  # 20s, in ms - fail fast instead of hanging
 ) if settings.GEMINI_API_KEY else None
+
 GEMINI_MODEL = "gemini-2.5-flash"
 
 SYSTEM_PROMPT_BASE = (
@@ -99,12 +100,6 @@ async def chat(
     try:
         response = await client.aio.models.generate_content(
             model=GEMINI_MODEL,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                max_output_tokens=1000,
-            ),
-        )
             contents=contents,
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
