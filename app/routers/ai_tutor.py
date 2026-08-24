@@ -98,14 +98,22 @@ async def chat(
     ]
 
     try:
-        response = await client.aio.models.generate_content(
+        import asyncio
+
+try:
+    response = await asyncio.wait_for(
+        client.aio.models.generate_content(
             model=GEMINI_MODEL,
             contents=contents,
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
                 max_output_tokens=1000,
             ),
-        )
+        ),
+        timeout=15,
+    )
+except asyncio.TimeoutError:
+    raise HTTPException(status_code=504, detail="AI Tutor timed out reaching Gemini — check outbound network access from the server.")
         reply_text = response.text
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI Tutor request failed: {e}")
