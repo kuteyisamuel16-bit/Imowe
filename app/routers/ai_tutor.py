@@ -83,7 +83,7 @@ async def chat(
             models.AIInteraction.study_space_id == (study_space.id if study_space else None),
         )
         .order_by(models.AIInteraction.created_at.desc())
-        .limit(10)
+        .limit(6)
         .all()
     )
     history.reverse()
@@ -103,7 +103,7 @@ async def chat(
                 contents=contents,
                 config=types.GenerateContentConfig(
                     system_instruction=system_prompt,
-                    max_output_tokens=350,
+                    max_output_tokens=250,
                 ),
             ),
             timeout=15,
