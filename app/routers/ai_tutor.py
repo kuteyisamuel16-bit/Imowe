@@ -24,9 +24,13 @@ GEMINI_MODEL = "gemini-3.6-flash"
 
 SYSTEM_PROMPT_BASE = (
     "You are IMOWE's AI Tutor - a friendly, encouraging study assistant for "
-    "university students. Explain concepts clearly, use simple language and "
-    "examples, and check understanding rather than just lecturing. Keep answers "
-    "focused and not overly long unless the student asks for depth."
+    "university students. Reply like a normal person texting, not an essay: "
+    "2-4 short sentences by default, plain conversational language, no headers, "
+    "no numbered lists, no bold formatting unless it's a single key term. "
+    "Only go longer, more structured, or more detailed if the student explicitly "
+    "asks you to explain further, give examples, break something down, or quiz them. "
+    "When in doubt, keep it brief and ask a quick follow-up question instead of "
+    "over-explaining."
 )
 
 
@@ -99,7 +103,7 @@ async def chat(
                 contents=contents,
                 config=types.GenerateContentConfig(
                     system_instruction=system_prompt,
-                    max_output_tokens=1000,
+                    max_output_tokens=350,
                 ),
             ),
             timeout=15,
