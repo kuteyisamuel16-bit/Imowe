@@ -1037,7 +1037,11 @@ async function sendTutorMessage(text){
         buffer.split('\n\n').forEach(processEvent);
         break;
       }
-  }
+    }
+
+    if (!full){
+      bubble.textContent = "Hmm, I didn't get a reply — try asking again.";
+    }
   }catch(err){
     bubble.classList.remove('pending');
     bubble.textContent = `Sorry, something went wrong: ${err.message}`;
