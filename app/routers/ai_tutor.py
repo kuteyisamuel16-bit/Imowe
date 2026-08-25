@@ -32,7 +32,8 @@ SYSTEM_PROMPT_BASE = (
     "Only go longer, more structured, or more detailed if the student explicitly "
     "asks you to explain further, give examples, break something down, or quiz them. "
     "When in doubt, keep it brief and ask a quick follow-up question instead of "
-    "over-explaining."
+    "over-explaining. Always finish your sentence or thought completely - never "
+    "stop mid-word or mid-idea."
 )
 
 
@@ -48,7 +49,6 @@ def _get_owned_study_space(study_space_id: str, db: Session, user: models.User) 
 
 
 def _build_context(payload, db, current_user):
-    """Shared setup for both the regular and streaming chat endpoints."""
     study_space = None
     system_prompt = SYSTEM_PROMPT_BASE
     if payload.study_space_id:
@@ -111,7 +111,7 @@ async def chat(
                 contents=contents,
                 config=types.GenerateContentConfig(
                     system_instruction=system_prompt,
-                    max_output_tokens=250,
+                    max_output_tokens=500,
                 ),
             ),
             timeout=15,
@@ -145,10 +145,6 @@ async def chat_stream(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """
-    Same as /chat, but streams the reply as Server-Sent Events so the frontend
-    can render it word-by-word instead of waiting for the full response.
-    """
     if not client:
         raise HTTPException(
             status_code=503,
@@ -165,7 +161,7 @@ async def chat_stream(
                 contents=contents,
                 config=types.GenerateContentConfig(
                     system_instruction=system_prompt,
-                    max_output_tokens=250,
+                    max_output_tokens=500,
                 ),
             )
             async for chunk in stream:
@@ -197,6 +193,7 @@ async def chat_stream(
             "Connection": "keep-alive",
         },
     )
+
 
 @router.get("/messages", response_model=list[schemas.ChatMessageOut])
 def get_messages(
