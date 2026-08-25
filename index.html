@@ -982,19 +982,57 @@ async function sendTutorMessage(text){
   renderTutorBubble('user', text);
 
   const container = document.getElementById('tutorMessages');
-  const pending = document.createElement('div');
-  pending.className = 'tutor-bubble assistant pending';
-  pending.textContent = 'Thinking…';
-  container.appendChild(pending);
+  const bubble = document.createElement('div');
+  bubble.className = 'tutor-bubble assistant pending';
+  bubble.textContent = '';
+  container.appendChild(bubble);
   container.scrollTop = container.scrollHeight;
 
   try{
-    const reply = await api.tutorChat(text, null);
-    pending.remove();
-    renderTutorBubble('assistant', reply.content);
+    const token = getToken();
+    const res = await fetch(`${API_BASE_URL}/ai-tutor/chat/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({ message: text, study_space_id: null })
+    });
+
+    if (!res.ok || !res.body){
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody.detail || `Request failed (${res.status})`);
+    }
+
+    bubble.classList.remove('pending');
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let full = '';
+
+    while (true){
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop();
+      for (const part of parts){
+        const line = part.trim();
+        if (!line.startsWith('data:')) continue;
+        let payload;
+        try { payload = JSON.parse(line.slice(5).trim()); } catch { continue; }
+        if (payload.delta){
+          full += payload.delta;
+          bubble.textContent = full;
+          container.scrollTop = container.scrollHeight;
+        } else if (payload.error){
+          bubble.textContent = `Sorry, something went wrong: ${payload.error}`;
+        }
+      }
+    }
   }catch(err){
-    pending.remove();
-    renderTutorBubble('assistant', `Sorry, something went wrong: ${err.message}`);
+    bubble.classList.remove('pending');
+    bubble.textContent = `Sorry, something went wrong: ${err.message}`;
   }
 }
 
