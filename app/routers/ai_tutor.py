@@ -210,3 +210,12 @@ def get_messages(
         .order_by(models.AIInteraction.created_at.asc())
     )
     return query.all()
+except Exception as e:
+        if "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e):
+            logger.warning("Gemini daily quota exceeded")
+            raise HTTPException(
+                status_code=429,
+                detail="AI Tutor has hit its daily usage limit. Please try again later, or ask the app owner to upgrade the Gemini API plan.",
+            )
+        logger.exception("Gemini call failed")
+        raise HTTPException(status_code=502, detail=f"AI Tutor request failed: {e}")
