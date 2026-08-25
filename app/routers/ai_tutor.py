@@ -188,8 +188,15 @@ async def chat_stream(
         db.refresh(assistant_msg)
         yield f"data: {json.dumps({'done': True})}\n\n"
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
-
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 @router.get("/messages", response_model=list[schemas.ChatMessageOut])
 def get_messages(
