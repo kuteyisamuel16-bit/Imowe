@@ -1,3 +1,4 @@
+from app.routers import narration
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -27,6 +28,7 @@ app.include_router(study_spaces.router)
 app.include_router(materials.router)
 app.include_router(ai_tutor.router)
 app.include_router(quiz.router)
+app.include_router(narration.router)
 
 @app.get("/health")
 def health_check():
