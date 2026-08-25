@@ -20,7 +20,7 @@ client = genai.Client(
     http_options=types.HttpOptions(timeout=20000),
 ) if settings.GEMINI_API_KEY else None
 
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-3.6-flash"
 
 SYSTEM_PROMPT_BASE = (
     "You are IMOWE's AI Tutor - a friendly, encouraging study assistant for "
