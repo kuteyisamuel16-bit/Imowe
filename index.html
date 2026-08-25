@@ -152,6 +152,13 @@
   .greet h2{font-size:24px; margin-bottom:4px;}
   .greet p{color:var(--ink-dim); font-size:14.5px;}
 
+  .home-topbar{display:flex; align-items:flex-start; justify-content:space-between; gap:12px;}
+  .bell-btn{background:var(--panel); border:1px solid var(--border); border-radius:50%; width:40px; height:40px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:16px; color:var(--ink-dim);}
+  .search-bar{display:flex; align-items:center; gap:10px; background:var(--panel); border:1px solid var(--border); border-radius:999px; padding:12px 16px; margin-top:16px;}
+  .search-bar input{flex:1; background:none; border:none; color:var(--ink); font-size:13.5px; outline:none;}
+  .search-bar input::placeholder{color:var(--ink-faint);}
+  .search-bar span{color:var(--ink-faint); font-size:15px;}
+
   .card{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:22px 24px; margin-top:18px;}
   .card-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;}
   .card-head h3{font-size:16px;}
@@ -203,6 +210,20 @@
   .profile-card h3{font-size:17px; margin-bottom:3px;}
   .profile-card span{font-size:13px; color:var(--ink-dim);}
   .profile-menu{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; margin-top:18px;}
+
+  /* ---------- subtabs (course detail / analytics) ---------- */
+  .subtabs{display:flex; gap:20px; border-bottom:1px solid var(--border); margin:16px 0 2px; overflow-x:auto; scrollbar-width:none;}
+  .subtabs::-webkit-scrollbar{display:none;}
+  .subtab{background:none; border:none; padding:10px 1px; font-size:13.5px; font-weight:600; color:var(--ink-dim); white-space:nowrap; border-bottom:2px solid transparent; margin-bottom:-1px; transition:color .2s, border-color .2s;}
+  .subtab.active{color:var(--ink); border-bottom-color:var(--blue);}
+  .subtab-panel{display:none;}
+  .subtab-panel.active{display:block;}
+
+  /* ---------- profile XP bar ---------- */
+  .xp-bar-wrap{margin-top:8px;}
+  .xp-label{font-size:11.5px; color:var(--ink-faint); display:block; margin-bottom:5px;}
+  .xp-bar-track{height:6px; border-radius:6px; background:var(--surface); overflow:hidden;}
+  .xp-bar-fill{height:100%; background:var(--grad); border-radius:6px;}
   .profile-menu-item{width:100%; display:flex; align-items:center; gap:12px; background:transparent; border:none; border-bottom:1px solid var(--border);
     color:var(--ink); padding:15px 18px; font-size:14px; text-align:left;}
   .profile-menu-item:last-child{border-bottom:none;}
@@ -371,9 +392,17 @@
 
     <!-- HOME -->
     <div class="subview active" id="app-home">
-      <div class="greet">
-        <h2 id="greetName">Good morning 👋</h2>
-        <p>Let's make today productive!</p>
+      <div class="home-topbar">
+        <div class="greet">
+          <h2 id="greetName">Good morning 👋</h2>
+          <p>Let's make today productive!</p>
+        </div>
+        <button class="bell-btn" title="Notifications (coming soon)">🔔</button>
+      </div>
+
+      <div class="search-bar">
+        <span>🔍</span>
+        <input type="text" placeholder="Search anything (notes, topics, books...)" disabled>
       </div>
 
       <div class="quick-actions">
@@ -413,26 +442,66 @@
     <div class="subview" id="app-course">
       <button class="btn-cancel" id="backToLearn" style="width:auto; padding:8px 16px; margin-bottom:16px;">← Back to Study Space</button>
       <h2 id="courseTitle">Course</h2>
-      <div class="hero-stat">
-        <div>
-          <span>Course Progress</span>
-          <strong id="courseProgressPct">0%</strong>
-          <p>You're doing great! Keep going.</p>
-        </div>
-        <div class="hero-ring" id="courseRing"></div>
+
+      <div class="subtabs" id="courseSubtabs">
+        <button class="subtab active" data-course-tab="overview">Overview</button>
+        <button class="subtab" data-course-tab="materials">Materials</button>
+        <button class="subtab" data-course-tab="notes">Notes</button>
+        <button class="subtab" data-course-tab="tests">Tests</button>
+        <button class="subtab" data-course-tab="progress">Progress</button>
       </div>
-      <div class="card">
-        <div class="card-head"><h3>Study Tools</h3></div>
-        <div class="quick-actions" style="grid-template-columns:repeat(4,1fr);">
-          <div class="quick-action" data-app-tab="tutor"><div class="quick-icon"><img src="logo.png" alt="AI Tutor" class="quick-icon-img"></div><span>AI Tutor</span></div>
-          <div class="quick-action"><div class="quick-icon">📝</div><span>Summary</span></div>
-          <div class="quick-action"><div class="quick-icon">❓</div><span>Quiz</span></div>
-          <div class="quick-action"><div class="quick-icon">🗂️</div><span>Flashcards</span></div>
+
+      <div class="subtab-panel active" id="courseTab-overview">
+        <div class="hero-stat">
+          <div>
+            <span>Course Progress</span>
+            <strong id="courseProgressPct">0%</strong>
+            <p>You're doing great! Keep going.</p>
+          </div>
+          <div class="hero-ring" id="courseRing"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Study Tools</h3></div>
+          <div class="quick-actions" style="grid-template-columns:repeat(4,1fr);">
+            <div class="quick-action" data-app-tab="tutor"><div class="quick-icon"><img src="logo.png" alt="AI Tutor" class="quick-icon-img"></div><span>AI Tutor</span></div>
+            <div class="quick-action"><div class="quick-icon">📝</div><span>Summary</span></div>
+            <div class="quick-action" data-course-tab-jump="tests"><div class="quick-icon">❓</div><span>Quiz</span></div>
+            <div class="quick-action"><div class="quick-icon">🗂️</div><span>Flashcards</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Course Memory</h3></div>
+          <p class="muted">IMOWE will summarize key concepts here once materials are uploaded and processed.</p>
         </div>
       </div>
-      <div class="card">
-        <div class="card-head"><h3>Course Memory</h3></div>
-        <p class="muted">IMOWE will summarize key concepts here once materials are uploaded and processed.</p>
+
+      <div class="subtab-panel" id="courseTab-materials">
+        <div id="courseMaterialsList"><p class="muted">Loading…</p></div>
+      </div>
+
+      <div class="subtab-panel" id="courseTab-notes">
+        <div class="card" style="text-align:center; padding:40px 24px;">
+          <h3 style="margin-bottom:8px;">Notes</h3>
+          <p class="muted">AI-generated notes from your materials and lectures will appear here.</p>
+        </div>
+      </div>
+
+      <div class="subtab-panel" id="courseTab-tests">
+        <div class="card" style="text-align:center; padding:40px 24px;">
+          <h3 style="margin-bottom:8px;">Tests</h3>
+          <p class="muted">Quizzes generated from this course's materials will appear here.</p>
+        </div>
+      </div>
+
+      <div class="subtab-panel" id="courseTab-progress">
+        <div class="hero-stat">
+          <div>
+            <span>Course Progress</span>
+            <strong id="courseProgressPct2">0%</strong>
+            <p>Tracked from quiz results and study activity.</p>
+          </div>
+          <div class="hero-ring" id="courseRing2"></div>
+        </div>
       </div>
     </div>
 
@@ -448,26 +517,56 @@
       </div>
 
       <div id="analyticsContent" style="display:none;">
-        <div class="hero-stat">
-          <div><span>Overall Performance</span><strong>Good</strong><p>You're in the top 25% of IMOWE users</p></div>
-          <div class="hero-ring">B+</div>
+        <div class="subtabs" id="analyticsSubtabs">
+          <button class="subtab active" data-analytics-tab="overview">Overview</button>
+          <button class="subtab" data-analytics-tab="performance">Performance</button>
+          <button class="subtab" data-analytics-tab="topics">Topics</button>
+          <button class="subtab" data-analytics-tab="habits">Habits</button>
         </div>
-        <div class="stat-grid">
-          <div class="stat-box"><span>Courses</span><strong id="statCourses">–</strong></div>
-          <div class="stat-box"><span>Avg. Score</span><strong>78%</strong></div>
-          <div class="stat-box"><span>Study Time</span><strong>32h 45m</strong></div>
+
+        <div class="subtab-panel active" id="analyticsTab-overview">
+          <div class="hero-stat">
+            <div><span>Overall Performance</span><strong>Good</strong><p>You're in the top 25% of IMOWE users</p></div>
+            <div class="hero-ring">B+</div>
+          </div>
+          <div class="stat-grid">
+            <div class="stat-box"><span>Courses</span><strong id="statCourses">–</strong></div>
+            <div class="stat-box"><span>Avg. Score</span><strong>78%</strong></div>
+            <div class="stat-box"><span>Study Time</span><strong>32h 45m</strong></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Strengths</h3></div>
+            <div class="bar-row"><span>Media Theories</span><div class="progress-track"><div class="progress-fill good" style="width:92%"></div></div><span>92%</span></div>
+            <div class="bar-row"><span>Research Methods</span><div class="progress-track"><div class="progress-fill good" style="width:85%"></div></div><span>85%</span></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Needs Improvement</h3></div>
+            <div class="bar-row"><span>Statistics</span><div class="progress-track"><div class="progress-fill warn" style="width:62%"></div></div><span>62%</span></div>
+            <div class="bar-row"><span>Sampling Techniques</span><div class="progress-track"><div class="progress-fill warn" style="width:58%"></div></div><span>58%</span></div>
+          </div>
+          <p class="muted" style="margin-top:12px;">Strengths/weaknesses shown here are placeholder data until the Academic Intelligence stage is connected.</p>
         </div>
-        <div class="card">
-          <div class="card-head"><h3>Strengths</h3></div>
-          <div class="bar-row"><span>Media Theories</span><div class="progress-track"><div class="progress-fill good" style="width:92%"></div></div><span>92%</span></div>
-          <div class="bar-row"><span>Research Methods</span><div class="progress-track"><div class="progress-fill good" style="width:85%"></div></div><span>85%</span></div>
+
+        <div class="subtab-panel" id="analyticsTab-performance">
+          <div class="card" style="text-align:center; padding:40px 24px;">
+            <h3 style="margin-bottom:8px;">Performance over time</h3>
+            <p class="muted">Score trends across quizzes and study sessions will appear here.</p>
+          </div>
         </div>
-        <div class="card">
-          <div class="card-head"><h3>Needs Improvement</h3></div>
-          <div class="bar-row"><span>Statistics</span><div class="progress-track"><div class="progress-fill warn" style="width:62%"></div></div><span>62%</span></div>
-          <div class="bar-row"><span>Sampling Techniques</span><div class="progress-track"><div class="progress-fill warn" style="width:58%"></div></div><span>58%</span></div>
+
+        <div class="subtab-panel" id="analyticsTab-topics">
+          <div class="card" style="text-align:center; padding:40px 24px;">
+            <h3 style="margin-bottom:8px;">Topics</h3>
+            <p class="muted">A full mastery breakdown by topic will appear here.</p>
+          </div>
         </div>
-        <p class="muted" style="margin-top:12px;">Strengths/weaknesses shown here are placeholder data until the Academic Intelligence stage is connected.</p>
+
+        <div class="subtab-panel" id="analyticsTab-habits">
+          <div class="card" style="text-align:center; padding:40px 24px;">
+            <h3 style="margin-bottom:8px;">Study habits</h3>
+            <p class="muted">Study streaks, consistency, and session patterns will appear here.</p>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -475,7 +574,14 @@
     <div class="subview" id="app-profile">
       <div class="profile-card">
         <div class="profile-avatar" id="profileInitial">?</div>
-        <div><h3 id="profileName">—</h3><span id="profileProgramme">Add your programme in Academic Profile</span></div>
+        <div style="flex:1; min-width:0;">
+          <h3 id="profileName">—</h3>
+          <span id="profileProgramme">Add your programme in Academic Profile</span>
+          <div class="xp-bar-wrap">
+            <span class="xp-label" id="profileXpLabel">Level 1 · 0 XP</span>
+            <div class="xp-bar-track"><div class="xp-bar-fill" id="profileXpFill" style="width:0%"></div></div>
+          </div>
+        </div>
       </div>
       <div class="profile-menu">
         <button class="profile-menu-item"><span>🎓</span><span>Academic Profile</span><span class="profile-menu-arrow">›</span></button>
@@ -606,6 +712,7 @@ const api = {
   listStudySpaces: (statusFilter) => apiRequest(`/study-spaces${statusFilter ? `?status_filter=${statusFilter}` : ''}`),
   addCourse: (title, subtitle) => apiRequest('/study-spaces', { method:'POST', body:{ title, subtitle } }),
   getStudySpace: (id) => apiRequest(`/study-spaces/${id}`),
+  listMaterials: (id) => apiRequest(`/study-spaces/${id}/materials`),
   tutorMessages: (studySpaceId) => apiRequest(`/ai-tutor/messages${studySpaceId ? `?study_space_id=${studySpaceId}` : ''}`),
   tutorChat: (message, studySpaceId) => apiRequest('/ai-tutor/chat', { method:'POST', body:{ message, study_space_id: studySpaceId || null } }),
 };
@@ -875,15 +982,77 @@ async function openCourse(id){
   showView('app');
   showAppTab('course');
   document.getElementById('courseTitle').textContent = 'Loading…';
+
+  // reset to the Overview tab each time a course is opened
+  document.querySelectorAll('#courseSubtabs .subtab').forEach(b => b.classList.remove('active'));
+  document.querySelector('#courseSubtabs .subtab[data-course-tab="overview"]').classList.add('active');
+  document.querySelectorAll('#app-course .subtab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('courseTab-overview').classList.add('active');
+  document.getElementById('courseMaterialsList').innerHTML = '<p class="muted">Loading…</p>';
+
   try{
     const s = await api.getStudySpace(id);
     document.getElementById('courseTitle').textContent = s.course.title;
     document.getElementById('courseProgressPct').textContent = `${Math.round(s.progress_percent)}%`;
     document.getElementById('courseRing').textContent = `${Math.round(s.progress_percent)}%`;
+    document.getElementById('courseProgressPct2').textContent = `${Math.round(s.progress_percent)}%`;
+    document.getElementById('courseRing2').textContent = `${Math.round(s.progress_percent)}%`;
   }catch{
     document.getElementById('courseTitle').textContent = 'Could not load course';
   }
 }
+
+/* ---------- Course Detail subtabs ---------- */
+document.querySelectorAll('#courseSubtabs .subtab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const key = btn.dataset.courseTab;
+    document.querySelectorAll('#courseSubtabs .subtab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('#app-course .subtab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById(`courseTab-${key}`).classList.add('active');
+    if (key === 'materials') loadCourseMaterials();
+  });
+});
+
+document.querySelectorAll('[data-course-tab-jump]').forEach(el => {
+  el.addEventListener('click', () => {
+    document.querySelector(`#courseSubtabs .subtab[data-course-tab="${el.dataset.courseTabJump}"]`)?.click();
+  });
+});
+
+async function loadCourseMaterials(){
+  const container = document.getElementById('courseMaterialsList');
+  container.innerHTML = '<p class="muted">Loading…</p>';
+  try{
+    const materials = await api.listMaterials(currentCourseId);
+    if (!materials.length){
+      container.innerHTML = '<p class="muted">No materials uploaded yet.</p>';
+      return;
+    }
+    container.innerHTML = materials.map(m => `
+      <div class="course-row" style="margin-bottom:8px; background:var(--panel); border:1px solid var(--border); border-radius:16px;">
+        <div class="course-cover" style="display:flex; align-items:center; justify-content:center; font-size:18px;">📄</div>
+        <div class="course-info">
+          <strong>${escapeHtml(m.title)}</strong>
+          <span>${m.created_at ? new Date(m.created_at).toLocaleDateString() : ''}</span>
+        </div>
+      </div>
+    `).join('');
+  }catch{
+    container.innerHTML = '<p class="muted">Could not load materials.</p>';
+  }
+}
+
+/* ---------- Analytics subtabs ---------- */
+document.querySelectorAll('#analyticsSubtabs .subtab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const key = btn.dataset.analyticsTab;
+    document.querySelectorAll('#analyticsSubtabs .subtab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('#analyticsContent .subtab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById(`analyticsTab-${key}`).classList.add('active');
+  });
+});
 
 /* Add course modal */
 const addCourseModal = document.getElementById('addCourseModal');
@@ -941,6 +1110,10 @@ function loadProfile(){
   document.getElementById('profileInitial').textContent = (currentUser.full_name || '?')[0];
   const programme = currentUser.academic_profile?.programme;
   document.getElementById('profileProgramme').textContent = programme || 'Add your programme in Academic Profile';
+
+  // Placeholder until the gamification/XP system is wired up server-side
+  document.getElementById('profileXpLabel').textContent = 'Level 1 · 0 XP';
+  document.getElementById('profileXpFill').style.width = '0%';
 }
 
 /* =========================================================
