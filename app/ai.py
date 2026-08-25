@@ -12,7 +12,7 @@ client = genai.Client(
     http_options=types.HttpOptions(timeout=20000),  # 20s, in ms - fail fast instead of hanging
 ) if settings.GEMINI_API_KEY else None
 
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-3.6-flash"
 
 
 def is_configured() -> bool:
