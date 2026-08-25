@@ -184,6 +184,8 @@
   .course-info strong{font-size:14.5px;}
   .course-info span{font-size:12.5px; color:var(--ink-dim);}
   .course-pct{font-size:13px; font-weight:600; color:var(--ink-dim); flex-shrink:0;}
+  .narrate-btn{background:var(--panel-raised); border:1px solid var(--border); border-radius:50%; width:34px; height:34px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:14px; color:var(--ink-dim); cursor:pointer;}
+  .narrate-btn:disabled{opacity:.5; cursor:default;}
 
   .ss-header{display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; flex-wrap:wrap; gap:12px;}
   .ss-filter-tabs{display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap;}
@@ -717,11 +719,30 @@ const api = {
   tutorChat: (message, studySpaceId) => apiRequest('/ai-tutor/chat', { method:'POST', body:{ message, study_space_id: studySpaceId || null } }),
 };
 
+// Separate from `api` above because it returns raw audio bytes, not JSON.
+async function narrate(text){
+  const token = getToken();
+  const res = await fetch(`${API_BASE_URL}/narration/speak`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify({ text })
+  });
+  if (!res.ok){
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody.detail || `Request failed (${res.status})`);
+  }
+  return res.blob();
+}
+
 /* =========================================================
    STATE
    ========================================================= */
 let currentUser = null;
 let currentCourseId = null;
+let currentMaterials = [];
 
 /* =========================================================
    VIEW ROUTER
@@ -1025,6 +1046,7 @@ async function loadCourseMaterials(){
   container.innerHTML = '<p class="muted">Loading…</p>';
   try{
     const materials = await api.listMaterials(currentCourseId);
+    currentMaterials = materials;
     if (!materials.length){
       container.innerHTML = '<p class="muted">No materials uploaded yet.</p>';
       return;
@@ -1036,12 +1058,37 @@ async function loadCourseMaterials(){
           <strong>${escapeHtml(m.title)}</strong>
           <span>${m.created_at ? new Date(m.created_at).toLocaleDateString() : ''}</span>
         </div>
+        <button class="narrate-btn" data-narrate-id="${m.id}" title="Listen">🔊</button>
       </div>
     `).join('');
   }catch{
     container.innerHTML = '<p class="muted">Could not load materials.</p>';
   }
 }
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-narrate-id]');
+  if (!btn) return;
+  const material = currentMaterials.find(m => String(m.id) === btn.dataset.narrateId);
+  if (!material) return;
+
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳';
+  try{
+    const blob = await narrate(material.content);
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.addEventListener('ended', () => URL.revokeObjectURL(url));
+    audio.addEventListener('error', () => URL.revokeObjectURL(url));
+    await audio.play();
+  }catch(err){
+    alert(`Couldn't generate narration: ${err.message}`);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+});
 
 /* ---------- Analytics subtabs ---------- */
 document.querySelectorAll('#analyticsSubtabs .subtab').forEach(btn => {
