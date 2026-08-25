@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -9,6 +10,8 @@ from app.database import get_db
 from app.deps import get_current_user
 from app import models, schemas
 from app.config import settings
+
+logger = logging.getLogger("imowe.ai_tutor")
 
 router = APIRouter(prefix="/ai-tutor", tags=["ai-tutor"])
 
@@ -103,11 +106,13 @@ async def chat(
         )
         reply_text = response.text
     except asyncio.TimeoutError:
+        logger.exception("Gemini call timed out after 15s")
         raise HTTPException(
             status_code=504,
             detail="AI Tutor timed out reaching Gemini - check outbound network access from the server.",
         )
     except Exception as e:
+        logger.exception("Gemini call failed")
         raise HTTPException(status_code=502, detail=f"AI Tutor request failed: {e}")
 
     assistant_msg = models.AIInteraction(
