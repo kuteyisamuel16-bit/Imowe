@@ -90,6 +90,18 @@ def _build_context(payload, db, current_user):
     return study_space, system_prompt, contents
 
 
+def _raise_for_gemini_error(e: Exception):
+    """Shared error mapping for both /chat and /chat/stream."""
+    if "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e):
+        logger.warning("Gemini daily quota exceeded")
+        raise HTTPException(
+            status_code=429,
+            detail="AI Tutor has hit its daily usage limit. Please try again later, or ask the app owner to upgrade the Gemini API plan.",
+        )
+    logger.exception("Gemini call failed")
+    raise HTTPException(status_code=502, detail=f"AI Tutor request failed: {e}")
+
+
 @router.post("/chat", response_model=schemas.ChatMessageOut)
 async def chat(
     payload: schemas.ChatMessageIn,
@@ -124,8 +136,7 @@ async def chat(
             detail="AI Tutor timed out reaching Gemini - check outbound network access from the server.",
         )
     except Exception as e:
-        logger.exception("Gemini call failed")
-        raise HTTPException(status_code=502, detail=f"AI Tutor request failed: {e}")
+        _raise_for_gemini_error(e)
 
     assistant_msg = models.AIInteraction(
         user_id=current_user.id,
@@ -169,8 +180,12 @@ async def chat_stream(
                     full_text += chunk.text
                     yield f"data: {json.dumps({'delta': chunk.text})}\n\n"
         except Exception as e:
-            logger.exception("Gemini stream failed")
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            if "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e):
+                logger.warning("Gemini daily quota exceeded")
+                yield f"data: {json.dumps({'error': 'AI Tutor has hit its daily usage limit. Please try again later.'})}\n\n"
+            else:
+                logger.exception("Gemini stream failed")
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
             return
 
         assistant_msg = models.AIInteraction(
@@ -210,12 +225,3 @@ def get_messages(
         .order_by(models.AIInteraction.created_at.asc())
     )
     return query.all()
-except Exception as e:
-        if "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e):
-            logger.warning("Gemini daily quota exceeded")
-            raise HTTPException(
-                status_code=429,
-                detail="AI Tutor has hit its daily usage limit. Please try again later, or ask the app owner to upgrade the Gemini API plan.",
-            )
-        logger.exception("Gemini call failed")
-        raise HTTPException(status_code=502, detail=f"AI Tutor request failed: {e}")
