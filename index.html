@@ -1010,6 +1010,7 @@ async function sendTutorMessage(text){
     let buffer = '';
     let full = '';
 
+    let hadError = false;
     const processEvent = (rawLine) => {
       const line = rawLine.trim();
       if (!line.startsWith('data:')) return;
@@ -1020,6 +1021,7 @@ async function sendTutorMessage(text){
         bubble.textContent = full;
         container.scrollTop = container.scrollHeight;
       } else if (payload.error){
+        hadError = true;
         bubble.textContent = `Sorry, something went wrong: ${payload.error}`;
       }
     };
@@ -1039,7 +1041,7 @@ async function sendTutorMessage(text){
       }
     }
 
-    if (!full){
+    if (!full && !hadError){
       bubble.textContent = "Hmm, I didn't get a reply — try asking again.";
     }
   }catch(err){
