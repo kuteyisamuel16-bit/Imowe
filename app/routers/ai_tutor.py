@@ -1,7 +1,9 @@
 import asyncio
+import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from google import genai
 from google.genai import types
@@ -45,18 +47,8 @@ def _get_owned_study_space(study_space_id: str, db: Session, user: models.User) 
     return study_space
 
 
-@router.post("/chat", response_model=schemas.ChatMessageOut)
-async def chat(
-    payload: schemas.ChatMessageIn,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-):
-    if not client:
-        raise HTTPException(
-            status_code=503,
-            detail="AI Tutor isn't configured yet - GEMINI_API_KEY is missing.",
-        )
-
+def _build_context(payload, db, current_user):
+    """Shared setup for both the regular and streaming chat endpoints."""
     study_space = None
     system_prompt = SYSTEM_PROMPT_BASE
     if payload.study_space_id:
@@ -95,6 +87,22 @@ async def chat(
         )
         for m in history
     ]
+    return study_space, system_prompt, contents
+
+
+@router.post("/chat", response_model=schemas.ChatMessageOut)
+async def chat(
+    payload: schemas.ChatMessageIn,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if not client:
+        raise HTTPException(
+            status_code=503,
+            detail="AI Tutor isn't configured yet - GEMINI_API_KEY is missing.",
+        )
+
+    study_space, system_prompt, contents = _build_context(payload, db, current_user)
 
     try:
         response = await asyncio.wait_for(
@@ -129,6 +137,58 @@ async def chat(
     db.commit()
     db.refresh(assistant_msg)
     return assistant_msg
+
+
+@router.post("/chat/stream")
+async def chat_stream(
+    payload: schemas.ChatMessageIn,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """
+    Same as /chat, but streams the reply as Server-Sent Events so the frontend
+    can render it word-by-word instead of waiting for the full response.
+    """
+    if not client:
+        raise HTTPException(
+            status_code=503,
+            detail="AI Tutor isn't configured yet - GEMINI_API_KEY is missing.",
+        )
+
+    study_space, system_prompt, contents = _build_context(payload, db, current_user)
+
+    async def event_generator():
+        full_text = ""
+        try:
+            stream = await client.aio.models.generate_content_stream(
+                model=GEMINI_MODEL,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    max_output_tokens=250,
+                ),
+            )
+            async for chunk in stream:
+                if chunk.text:
+                    full_text += chunk.text
+                    yield f"data: {json.dumps({'delta': chunk.text})}\n\n"
+        except Exception as e:
+            logger.exception("Gemini stream failed")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            return
+
+        assistant_msg = models.AIInteraction(
+            user_id=current_user.id,
+            study_space_id=study_space.id if study_space else None,
+            role="assistant",
+            content=full_text,
+        )
+        db.add(assistant_msg)
+        db.commit()
+        db.refresh(assistant_msg)
+        yield f"data: {json.dumps({'done': True})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @router.get("/messages", response_model=list[schemas.ChatMessageOut])
