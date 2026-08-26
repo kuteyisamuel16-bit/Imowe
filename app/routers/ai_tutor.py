@@ -48,10 +48,46 @@ def _get_owned_study_space(study_space_id: str, db: Session, user: models.User) 
     return study_space
 
 
+def _get_owned_material(material_id: str, db: Session, user: models.User) -> models.Material:
+    material = (
+        db.query(models.Material)
+        .join(models.StudySpace, models.Material.study_space_id == models.StudySpace.id)
+        .filter(models.Material.id == material_id, models.StudySpace.user_id == user.id)
+        .first()
+    )
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found.")
+    return material
+
+
 def _build_context(payload, db, current_user):
+    """
+    Grounding priority: a specific material (isolated - only that material's
+    own extracted_text, never another material's) takes precedence over a
+    course-level (study_space) grounding, which takes precedence over a
+    general untethered conversation.
+    """
     study_space = None
+    material = None
     system_prompt = SYSTEM_PROMPT_BASE
-    if payload.study_space_id:
+
+    if payload.material_id:
+        material = _get_owned_material(payload.material_id, db, current_user)
+        study_space = material.study_space
+        label = material.filename
+        if material.extracted_text:
+            system_prompt += (
+                f" The student is asking about a specific material titled '{label}'. "
+                "Answer ONLY using the content of this material below. If the answer isn't "
+                "covered in it, say so honestly instead of guessing.\n\n"
+                f"MATERIAL CONTENT:\n{material.extracted_text[:12000]}"
+            )
+        else:
+            system_prompt += (
+                f" The student is asking about a material titled '{label}', but it hasn't "
+                "finished processing yet or has no extracted text - let them know."
+            )
+    elif payload.study_space_id:
         study_space = _get_owned_study_space(payload.study_space_id, db, current_user)
         system_prompt += (
             f" The student is currently studying '{study_space.course.title}'"
@@ -62,22 +98,24 @@ def _build_context(payload, db, current_user):
     user_msg = models.AIInteraction(
         user_id=current_user.id,
         study_space_id=study_space.id if study_space else None,
+        material_id=material.id if material else None,
         role="user",
         content=payload.message,
     )
     db.add(user_msg)
     db.commit()
 
-    history = (
-        db.query(models.AIInteraction)
-        .filter(
-            models.AIInteraction.user_id == current_user.id,
+    history_query = db.query(models.AIInteraction).filter(models.AIInteraction.user_id == current_user.id)
+    if material:
+        # Strict isolation: only this material's own thread, nothing else.
+        history_query = history_query.filter(models.AIInteraction.material_id == material.id)
+    else:
+        history_query = history_query.filter(
+            models.AIInteraction.material_id.is_(None),
             models.AIInteraction.study_space_id == (study_space.id if study_space else None),
         )
-        .order_by(models.AIInteraction.created_at.desc())
-        .limit(6)
-        .all()
-    )
+
+    history = history_query.order_by(models.AIInteraction.created_at.desc()).limit(6).all()
     history.reverse()
 
     contents = [
@@ -87,11 +125,10 @@ def _build_context(payload, db, current_user):
         )
         for m in history
     ]
-    return study_space, system_prompt, contents
+    return study_space, material, system_prompt, contents
 
 
 def _raise_for_gemini_error(e: Exception):
-    """Shared error mapping for both /chat and /chat/stream."""
     if "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e):
         logger.warning("Gemini daily quota exceeded")
         raise HTTPException(
@@ -109,38 +146,30 @@ async def chat(
     current_user: models.User = Depends(get_current_user),
 ):
     if not client:
-        raise HTTPException(
-            status_code=503,
-            detail="AI Tutor isn't configured yet - GEMINI_API_KEY is missing.",
-        )
+        raise HTTPException(status_code=503, detail="AI Tutor isn't configured yet - GEMINI_API_KEY is missing.")
 
-    study_space, system_prompt, contents = _build_context(payload, db, current_user)
+    study_space, material, system_prompt, contents = _build_context(payload, db, current_user)
 
     try:
         response = await asyncio.wait_for(
             client.aio.models.generate_content(
                 model=GEMINI_MODEL,
                 contents=contents,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    max_output_tokens=500,
-                ),
+                config=types.GenerateContentConfig(system_instruction=system_prompt, max_output_tokens=500),
             ),
             timeout=15,
         )
         reply_text = response.text
     except asyncio.TimeoutError:
         logger.exception("Gemini call timed out after 15s")
-        raise HTTPException(
-            status_code=504,
-            detail="AI Tutor timed out reaching Gemini - check outbound network access from the server.",
-        )
+        raise HTTPException(status_code=504, detail="AI Tutor timed out reaching Gemini - check outbound network access from the server.")
     except Exception as e:
         _raise_for_gemini_error(e)
 
     assistant_msg = models.AIInteraction(
         user_id=current_user.id,
         study_space_id=study_space.id if study_space else None,
+        material_id=material.id if material else None,
         role="assistant",
         content=reply_text,
     )
@@ -157,12 +186,9 @@ async def chat_stream(
     current_user: models.User = Depends(get_current_user),
 ):
     if not client:
-        raise HTTPException(
-            status_code=503,
-            detail="AI Tutor isn't configured yet - GEMINI_API_KEY is missing.",
-        )
+        raise HTTPException(status_code=503, detail="AI Tutor isn't configured yet - GEMINI_API_KEY is missing.")
 
-    study_space, system_prompt, contents = _build_context(payload, db, current_user)
+    study_space, material, system_prompt, contents = _build_context(payload, db, current_user)
 
     async def event_generator():
         full_text = ""
@@ -170,10 +196,7 @@ async def chat_stream(
             stream = await client.aio.models.generate_content_stream(
                 model=GEMINI_MODEL,
                 contents=contents,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    max_output_tokens=500,
-                ),
+                config=types.GenerateContentConfig(system_instruction=system_prompt, max_output_tokens=500),
             )
             async for chunk in stream:
                 if chunk.text:
@@ -191,6 +214,7 @@ async def chat_stream(
         assistant_msg = models.AIInteraction(
             user_id=current_user.id,
             study_space_id=study_space.id if study_space else None,
+            material_id=material.id if material else None,
             role="assistant",
             content=full_text,
         )
@@ -202,26 +226,20 @@ async def chat_stream(
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-            "Connection": "keep-alive",
-        },
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
     )
 
 
 @router.get("/messages", response_model=list[schemas.ChatMessageOut])
 def get_messages(
     study_space_id: str | None = None,
+    material_id: str | None = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    query = (
-        db.query(models.AIInteraction)
-        .filter(
-            models.AIInteraction.user_id == current_user.id,
-            models.AIInteraction.study_space_id == study_space_id,
-        )
-        .order_by(models.AIInteraction.created_at.asc())
-    )
-    return query.all()
+    query = db.query(models.AIInteraction).filter(models.AIInteraction.user_id == current_user.id)
+    if material_id:
+        query = query.filter(models.AIInteraction.material_id == material_id)
+    else:
+        query = query.filter(models.AIInteraction.material_id.is_(None), models.AIInteraction.study_space_id == study_space_id)
+    return query.order_by(models.AIInteraction.created_at.asc()).all()
