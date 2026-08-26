@@ -82,14 +82,28 @@ class MaterialOut(BaseModel):
     id: str
     filename: str
     content_type: Optional[str] = None
+    material_type: str
     status: str
     extracted_topics: Optional[str] = None  # JSON-encoded list of strings
+    extracted_text: Optional[str] = None
+    linked_material_id: Optional[str] = None
     created_at: datetime
+
+
+class RecordingCreate(BaseModel):
+    """A lecture recording, transcribed client-side (Web Speech API) and
+    sent up as plain text - no audio file involved."""
+    filename: str
+    transcript: str
+    linked_material_id: Optional[str] = None
+
+
 # ---------- AI Tutor ----------
 
 class ChatMessageIn(BaseModel):
     message: str
     study_space_id: Optional[str] = None
+    material_id: Optional[str] = None
 
 
 class ChatMessageOut(BaseModel):
@@ -99,6 +113,8 @@ class ChatMessageOut(BaseModel):
     role: str
     content: str
     created_at: datetime
+
+
 # ---------- Quiz ----------
 
 class QuizGenerateRequest(BaseModel):
