@@ -478,6 +478,7 @@
       </div>
 
       <div class="subtab-panel" id="courseTab-materials">
+        <button class="btn btn-primary" id="addMaterialBtn" style="width:auto; padding:10px 18px; margin-bottom:14px;">+ Add Material</button>
         <div id="courseMaterialsList"><p class="muted">Loading…</p></div>
       </div>
 
@@ -671,6 +672,20 @@
   </form>
 </div>
 
+<!-- Add material modal -->
+<div class="modal-backdrop" id="addMaterialModal">
+  <form class="modal" id="addMaterialForm">
+    <h3>Add a material</h3>
+    <div class="form-error" id="addMaterialError"></div>
+    <div class="field"><label>Title</label><input type="text" id="amTitle" required placeholder="e.g. Week 3 notes"></div>
+    <div class="field"><label>Content</label><textarea id="amContent" required rows="6" placeholder="Paste or type the notes/text for this material..." style="width:100%; background:var(--panel-raised); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 14px; color:var(--ink); font-family:inherit; font-size:14px; resize:vertical;"></textarea></div>
+    <div class="modal-actions">
+      <button type="button" class="btn-cancel" id="addMaterialCancel">Cancel</button>
+      <button type="submit" class="btn btn-primary">Add Material</button>
+    </div>
+  </form>
+</div>
+
 <script>
 /* =========================================================
    CONFIG — point this at your deployed FastAPI backend
@@ -715,6 +730,7 @@ const api = {
   addCourse: (title, subtitle) => apiRequest('/study-spaces', { method:'POST', body:{ title, subtitle } }),
   getStudySpace: (id) => apiRequest(`/study-spaces/${id}`),
   listMaterials: (id) => apiRequest(`/study-spaces/${id}/materials`),
+  addMaterial: (id, title, content) => apiRequest(`/study-spaces/${id}/materials`, { method:'POST', body:{ title, content } }),
   tutorMessages: (studySpaceId) => apiRequest(`/ai-tutor/messages${studySpaceId ? `?study_space_id=${studySpaceId}` : ''}`),
   tutorChat: (message, studySpaceId) => apiRequest('/ai-tutor/chat', { method:'POST', body:{ message, study_space_id: studySpaceId || null } }),
 };
@@ -1119,6 +1135,31 @@ document.getElementById('addCourseForm').addEventListener('submit', async (e) =>
     addCourseModal.classList.remove('show');
     document.getElementById('addCourseForm').reset();
     loadCourseList(currentFilter);
+  }catch(err){
+    errorBox.textContent = err.message;
+    errorBox.classList.add('show');
+  }
+});
+
+/* Add material modal */
+const addMaterialModal = document.getElementById('addMaterialModal');
+document.getElementById('addMaterialBtn').addEventListener('click', () => addMaterialModal.classList.add('show'));
+document.getElementById('addMaterialCancel').addEventListener('click', () => addMaterialModal.classList.remove('show'));
+addMaterialModal.addEventListener('click', (e) => { if (e.target === addMaterialModal) addMaterialModal.classList.remove('show'); });
+
+document.getElementById('addMaterialForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorBox = document.getElementById('addMaterialError');
+  errorBox.classList.remove('show');
+  try{
+    await api.addMaterial(
+      currentCourseId,
+      document.getElementById('amTitle').value,
+      document.getElementById('amContent').value
+    );
+    addMaterialModal.classList.remove('show');
+    document.getElementById('addMaterialForm').reset();
+    loadCourseMaterials();
   }catch(err){
     errorBox.textContent = err.message;
     errorBox.classList.add('show');
