@@ -62,18 +62,21 @@ def _get_owned_material(material_id: str, db: Session, user: models.User) -> mod
 
 def _build_context(payload, db, current_user):
     """
-    Grounding priority: a specific material (isolated - only that material's
-    own extracted_text, never another material's) takes precedence over a
-    course-level (study_space) grounding, which takes precedence over a
-    general untethered conversation.
+    Returns plain string IDs (study_space_id, material_id) rather than ORM
+    objects. This is deliberate: the caller commits inside this function,
+    which expires every loaded ORM object, and for /chat/stream the
+    generator body runs after the request's DB session has already closed -
+    touching an expired ORM attribute at that point raises
+    DetachedInstanceError. Plain strings have no such lifecycle problem.
     """
-    study_space = None
-    material = None
+    study_space_id = None
+    material_id = None
     system_prompt = SYSTEM_PROMPT_BASE
 
     if payload.material_id:
         material = _get_owned_material(payload.material_id, db, current_user)
-        study_space = material.study_space
+        material_id = material.id
+        study_space_id = material.study_space_id
         label = material.filename
         if material.extracted_text:
             system_prompt += (
@@ -89,6 +92,7 @@ def _build_context(payload, db, current_user):
             )
     elif payload.study_space_id:
         study_space = _get_owned_study_space(payload.study_space_id, db, current_user)
+        study_space_id = study_space.id
         system_prompt += (
             f" The student is currently studying '{study_space.course.title}'"
             f" ({study_space.course.subtitle or 'no subtitle set'})."
@@ -97,8 +101,8 @@ def _build_context(payload, db, current_user):
 
     user_msg = models.AIInteraction(
         user_id=current_user.id,
-        study_space_id=study_space.id if study_space else None,
-        material_id=material.id if material else None,
+        study_space_id=study_space_id,
+        material_id=material_id,
         role="user",
         content=payload.message,
     )
@@ -106,13 +110,12 @@ def _build_context(payload, db, current_user):
     db.commit()
 
     history_query = db.query(models.AIInteraction).filter(models.AIInteraction.user_id == current_user.id)
-    if material:
-        # Strict isolation: only this material's own thread, nothing else.
-        history_query = history_query.filter(models.AIInteraction.material_id == material.id)
+    if material_id:
+        history_query = history_query.filter(models.AIInteraction.material_id == material_id)
     else:
         history_query = history_query.filter(
             models.AIInteraction.material_id.is_(None),
-            models.AIInteraction.study_space_id == (study_space.id if study_space else None),
+            models.AIInteraction.study_space_id == study_space_id,
         )
 
     history = history_query.order_by(models.AIInteraction.created_at.desc()).limit(6).all()
@@ -125,7 +128,7 @@ def _build_context(payload, db, current_user):
         )
         for m in history
     ]
-    return study_space, material, system_prompt, contents
+    return study_space_id, material_id, system_prompt, contents
 
 
 def _raise_for_gemini_error(e: Exception):
@@ -148,7 +151,7 @@ async def chat(
     if not client:
         raise HTTPException(status_code=503, detail="AI Tutor isn't configured yet - GEMINI_API_KEY is missing.")
 
-    study_space, material, system_prompt, contents = _build_context(payload, db, current_user)
+    study_space_id, material_id, system_prompt, contents = _build_context(payload, db, current_user)
 
     try:
         response = await asyncio.wait_for(
@@ -168,8 +171,8 @@ async def chat(
 
     assistant_msg = models.AIInteraction(
         user_id=current_user.id,
-        study_space_id=study_space.id if study_space else None,
-        material_id=material.id if material else None,
+        study_space_id=study_space_id,
+        material_id=material_id,
         role="assistant",
         content=reply_text,
     )
@@ -188,7 +191,7 @@ async def chat_stream(
     if not client:
         raise HTTPException(status_code=503, detail="AI Tutor isn't configured yet - GEMINI_API_KEY is missing.")
 
-    study_space, material, system_prompt, contents = _build_context(payload, db, current_user)
+    study_space_id, material_id, system_prompt, contents = _build_context(payload, db, current_user)
 
     async def event_generator():
         full_text = ""
@@ -211,16 +214,23 @@ async def chat_stream(
                 yield f"data: {json.dumps({'error': str(e)})}\n\n"
             return
 
-        assistant_msg = models.AIInteraction(
-            user_id=current_user.id,
-            study_space_id=study_space.id if study_space else None,
-            material_id=material.id if material else None,
-            role="assistant",
-            content=full_text,
-        )
-        db.add(assistant_msg)
-        db.commit()
-        db.refresh(assistant_msg)
+        # New DB session here - the request's original session is already
+        # closed by the time this generator runs (see docstring above).
+        from app.database import SessionLocal
+        write_db = SessionLocal()
+        try:
+            assistant_msg = models.AIInteraction(
+                user_id=current_user.id,
+                study_space_id=study_space_id,
+                material_id=material_id,
+                role="assistant",
+                content=full_text,
+            )
+            write_db.add(assistant_msg)
+            write_db.commit()
+        finally:
+            write_db.close()
+
         yield f"data: {json.dumps({'done': True})}\n\n"
 
     return StreamingResponse(
