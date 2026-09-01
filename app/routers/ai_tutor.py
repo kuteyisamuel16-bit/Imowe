@@ -252,10 +252,10 @@ async def chat(
         _raise_for_gemini_error(e)
 
     assistant_msg = models.AIInteraction(
-        user_id=current_user.id,
-        thread_id=thread_id,
-        role="assistant",
-        content=reply_text,
+                user_id=user_id,
+                thread_id=thread_id,
+                role="assistant",
+                content=full_text,
     )
     db.add(assistant_msg)
     db.commit()
