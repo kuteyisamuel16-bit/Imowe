@@ -14,6 +14,7 @@ STATEMENTS = [
     "ALTER TABLE materials ADD COLUMN IF NOT EXISTS linked_material_id UUID REFERENCES materials(id)",
     "ALTER TABLE materials ALTER COLUMN file_path DROP NOT NULL",
     "ALTER TABLE ai_interactions ADD COLUMN IF NOT EXISTS material_id UUID REFERENCES materials(id)",
+    "ALTER TABLE ai_interactions ADD COLUMN IF NOT EXISTS thread_id UUID REFERENCES chat_threads(id)",
 ]
 
 
