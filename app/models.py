@@ -118,16 +118,31 @@ class Material(Base):
     linked_material = relationship("Material", remote_side=[id])
 
 
+class ChatThread(Base):
+    """
+    One conversation thread (ChatGPT-style history). A material or a course
+    can have many threads; each holds its own AIInteraction messages.
+    """
+    __tablename__ = "chat_threads"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False)
+    study_space_id = Column(UUID(as_uuid=False), ForeignKey("study_spaces.id"), nullable=True)
+    material_id = Column(UUID(as_uuid=False), ForeignKey("materials.id"), nullable=True)
+
+    title = Column(String(200), nullable=False, default="New chat")
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class AIInteraction(Base):
-    """
-    A single message in an AI Tutor conversation. material_id scopes the
-    conversation to one material's content only - a chat about Material A
-    never sees Material B's content or history.
-    """
+    """A single message in an AI Tutor conversation, belonging to one ChatThread."""
     __tablename__ = "ai_interactions"
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
     user_id = Column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False)
+    thread_id = Column(UUID(as_uuid=False), ForeignKey("chat_threads.id"), nullable=True)
     study_space_id = Column(UUID(as_uuid=False), ForeignKey("study_spaces.id"), nullable=True)
     material_id = Column(UUID(as_uuid=False), ForeignKey("materials.id"), nullable=True)
 
