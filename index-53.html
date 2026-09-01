@@ -1,0 +1,1744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IMOWE — A smarter way to learn</title>
+<meta name="description" content="IMOWE is an AI-powered academic ecosystem: Study Space, AI Tutor, lecture recording, analytics and more, all connected around your progress.">
+<meta name="theme-color" content="#0A0E27">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0E27;
+    --bg-2:#0F1638;
+    --panel:#0F1638;
+    --panel-raised:#131C42;
+    --surface:rgba(255,255,255,0.045);
+    --border:rgba(255,255,255,0.09);
+    --border-hi:rgba(255,255,255,0.18);
+    --ink:#F5F6FA;
+    --ink-dim:#9AA3C7;
+    --ink-faint:#6B7399;
+    --blue:#4F6EF7;
+    --purple:#9B4DF0;
+    --grad:linear-gradient(120deg,var(--blue) 0%,var(--purple) 100%);
+    --success:#22C55E;
+    --warning:#F59E0B;
+    --danger:#EF4444;
+    --radius-lg:24px;
+    --radius-md:16px;
+    --radius-sm:10px;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{scroll-behavior:smooth;}
+  @media (prefers-reduced-motion: reduce){
+    html{scroll-behavior:auto;}
+    *{animation-duration:.01ms !important; transition-duration:.01ms !important;}
+  }
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:'Inter',sans-serif; line-height:1.6;
+    -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  }
+  ::selection{background:var(--purple); color:#fff;}
+  a{color:inherit; text-decoration:none;}
+  ul{list-style:none;}
+  img{max-width:100%; display:block;}
+  button{font-family:inherit; cursor:pointer;}
+  input{font-family:inherit;}
+  h1,h2,h3,h4{font-family:'Sora',sans-serif; font-weight:700; letter-spacing:-0.01em;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+  :focus-visible{outline:2px solid var(--blue); outline-offset:2px; border-radius:4px;}
+
+  .wrap{max-width:1160px; margin:0 auto; padding:0 28px;}
+
+  /* ambient background glow, used behind hero/auth */
+  .bg-glow{
+    position:fixed; inset:0; z-index:-1; pointer-events:none;
+    background:
+      radial-gradient(680px 480px at 12% 8%, rgba(79,110,247,0.20), transparent 60%),
+      radial-gradient(620px 520px at 88% 18%, rgba(155,77,240,0.16), transparent 60%),
+      var(--bg);
+  }
+
+  /* ---------- header ---------- */
+  header{display:none;}
+  .nav-inner{
+    max-width:1160px; margin:0 auto; padding:12px 12px 12px 20px;
+    display:flex; align-items:center; justify-content:space-between;
+    background:rgba(10,14,39,0.7); border:1px solid var(--border); border-radius:999px;
+    backdrop-filter:blur(18px) saturate(140%); -webkit-backdrop-filter:blur(18px) saturate(140%);
+    transition:border-color .3s ease;
+  }
+  .logo{display:flex; align-items:center; gap:9px; font-family:'Sora',sans-serif; font-weight:700; font-size:17px;}
+  .logo img{width:30px; height:30px; border-radius:8px; object-fit:cover;}
+  nav.links{display:flex; gap:2px; align-items:center;}
+  nav.links a, nav.links button.navlink{
+    font-size:13.5px; font-weight:500; color:var(--ink-dim); padding:9px 15px; border-radius:999px;
+    background:transparent; border:none; transition:color .2s, background .2s;
+  }
+  nav.links a:hover, nav.links a.active, nav.links button.navlink:hover, nav.links button.navlink.active{
+    color:var(--ink); background:var(--surface);
+  }
+  .nav-actions{display:flex; align-items:center; gap:10px;}
+  .nav-cta{
+    font-size:13px; font-weight:600; padding:9px 18px; border-radius:999px;
+    background:var(--grad); color:#fff; white-space:nowrap; border:none;
+  }
+  .nav-cta:hover{filter:brightness(1.08);}
+  .nav-ghost{font-size:13px; font-weight:600; padding:9px 16px; border-radius:999px; color:var(--ink-dim); background:transparent; border:1px solid var(--border);}
+  .nav-ghost:hover{color:var(--ink); border-color:var(--border-hi);}
+
+  /* ---------- buttons ---------- */
+  .btn{display:inline-flex; align-items:center; gap:8px; justify-content:center;
+    padding:13px 24px; border-radius:12px; font-size:14.5px; font-weight:600; border:1px solid transparent;
+    transition:transform .2s, box-shadow .2s, filter .2s; white-space:nowrap; width:auto;}
+  .btn-primary{background:var(--grad); color:#fff; box-shadow:0 8px 30px -8px rgba(139,92,246,0.5);}
+  .btn-primary:hover{transform:translateY(-2px);}
+  .btn-primary:disabled{opacity:0.6; cursor:not-allowed; transform:none;}
+  .btn-outline{background:transparent; border-color:var(--border-hi); color:var(--ink);}
+  .btn-outline:hover{background:var(--surface);}
+  .btn-block{width:100%;}
+
+  /* ---------- LANDING ---------- */
+  #view-landing{padding:60px 0 110px; min-height:92vh; align-items:center; position:relative;}
+  #view-landing.active{display:flex;}
+  .landing-grid{display:flex; flex-direction:column; align-items:center; text-align:center; gap:22px; max-width:640px; margin:0 auto;}
+  .landing-grid img.hero-logo{width:88px; height:88px; border-radius:20px; margin-bottom:6px;}
+  .landing-grid h1{font-size:clamp(34px,6vw,54px); line-height:1.05;}
+  .landing-tag{color:var(--blue); font-weight:600; font-size:16px;}
+  .landing-sub{color:var(--ink-dim); font-size:16px; max-width:520px;}
+  .landing-actions{display:flex; gap:14px; margin-top:10px; flex-wrap:wrap; justify-content:center;}
+
+  .loop-strip{display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:36px;}
+  .loop-chip{
+    font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--ink-dim);
+    border:1px solid var(--border); padding:6px 12px; border-radius:999px; background:var(--surface);
+  }
+
+  /* ---------- AUTH ---------- */
+  .auth-card{width:100%; max-width:420px; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:40px 36px; position:relative;}
+  .modal-close{position:absolute; top:16px; right:16px; background:transparent; border:none; color:var(--ink-dim); font-size:16px; width:32px; height:32px; border-radius:50%;}
+  .modal-close:hover{background:var(--surface); color:var(--ink);}
+  .auth-logo-row{display:flex; align-items:center; gap:10px; margin-bottom:26px;}
+  .auth-logo-row img{width:38px; height:38px; border-radius:9px;}
+  .auth-logo-row span{font-family:'Sora',sans-serif; font-weight:700; font-size:19px;}
+  .auth-card h2{font-size:24px; margin-bottom:6px;}
+  .auth-card p.subtitle{color:var(--ink-dim); font-size:14px; margin-bottom:26px;}
+  .field{margin-bottom:16px;}
+  .field label{display:block; font-size:12.5px; font-weight:600; color:var(--ink-dim); margin-bottom:7px;}
+  .field input{width:100%; background:var(--panel-raised); border:1px solid var(--border); border-radius:var(--radius-sm);
+    padding:12px 14px; color:var(--ink); font-size:14.5px;}
+  .field input:focus{border-color:var(--blue); outline:none;}
+  .auth-switch{text-align:center; margin-top:20px; font-size:13.5px; color:var(--ink-dim);}
+  .auth-switch button{background:none; border:none; color:var(--blue); font-weight:600; font-size:13.5px; padding:0;}
+  .form-error{background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); color:#FCA5A5;
+    font-size:13px; padding:10px 14px; border-radius:var(--radius-sm); margin-bottom:16px; display:none;}
+  .form-error.show{display:block;}
+
+  /* ---------- APP SHELL (post-login) ---------- */
+  #view-app{display:none; padding:40px 0 110px; min-height:100vh;}
+  #view-app.active{display:block;}
+  .app-tabs{display:flex; gap:8px; margin-bottom:28px; flex-wrap:wrap;}
+  .app-tab{background:var(--panel); border:1px solid var(--border); color:var(--ink-dim);
+    padding:9px 18px; border-radius:999px; font-size:13px; font-weight:500;}
+  .app-tab.active{background:var(--grad); color:#fff; border-color:transparent;}
+
+  .subview{display:none;}
+  .subview.active{display:block;}
+
+  .greet h2{font-size:24px; margin-bottom:4px;}
+  .greet p{color:var(--ink-dim); font-size:14.5px;}
+
+  .home-topbar{display:flex; align-items:flex-start; justify-content:space-between; gap:12px;}
+  .bell-btn{background:var(--panel); border:1px solid var(--border); border-radius:50%; width:40px; height:40px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:16px; color:var(--ink-dim);}
+  .search-bar{display:flex; align-items:center; gap:10px; background:var(--panel); border:1px solid var(--border); border-radius:999px; padding:12px 16px; margin-top:16px;}
+  .search-bar input{flex:1; background:none; border:none; color:var(--ink); font-size:13.5px; outline:none;}
+  .search-bar input::placeholder{color:var(--ink-faint);}
+  .search-bar span{color:var(--ink-faint); font-size:15px;}
+
+  .card{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:22px 24px; margin-top:18px;}
+  .card-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;}
+  .card-head h3{font-size:16px;}
+  .card-head a, .card-head button.link{color:var(--blue); font-size:13.5px; font-weight:600; background:none; border:none;}
+  .muted{color:var(--ink-faint); font-size:14px;}
+
+  .quick-actions{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:22px;}
+  .quick-action{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md); padding:18px 10px;
+    display:flex; flex-direction:column; align-items:center; gap:10px; font-size:12.5px; font-weight:500; color:var(--ink-dim); text-align:center;}
+  .quick-action:hover{border-color:var(--blue); color:var(--ink); transform:translateY(-2px);}
+  .quick-icon{width:46px; height:46px; border-radius:14px; background:var(--grad); display:flex; align-items:center; justify-content:center; font-size:20px; overflow:hidden;}
+  .quick-icon-img{width:100%; height:100%; object-fit:cover;}
+
+  .progress-track{width:100%; height:6px; background:rgba(255,255,255,0.08); border-radius:999px; overflow:hidden; margin-top:6px;}
+  .progress-fill{height:100%; background:var(--grad); border-radius:999px;}
+  .progress-fill.good{background:var(--success);}
+  .progress-fill.warn{background:var(--warning);}
+
+  .course-row{display:flex; align-items:center; gap:14px; padding:12px; border-radius:var(--radius-md);}
+  .course-row:hover{background:var(--panel-raised);}
+  .course-cover{width:48px; height:62px; border-radius:8px; flex-shrink:0; background:var(--grad);}
+  .course-info{flex:1; display:flex; flex-direction:column; gap:5px; min-width:0;}
+  .course-info strong{font-size:14.5px;}
+  .course-info span{font-size:12.5px; color:var(--ink-dim);}
+  .course-pct{font-size:13px; font-weight:600; color:var(--ink-dim); flex-shrink:0;}
+  .narrate-btn{background:var(--panel-raised); border:1px solid var(--border); border-radius:50%; width:34px; height:34px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:14px; color:var(--ink-dim); cursor:pointer;}
+  .narrate-btn:disabled{opacity:.5; cursor:default;}
+
+  .ss-header{display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; flex-wrap:wrap; gap:12px;}
+  .ss-filter-tabs{display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap;}
+  .filter-pill{background:var(--panel); border:1px solid var(--border); color:var(--ink-dim); padding:7px 15px; border-radius:999px; font-size:12.5px; font-weight:500;}
+  .filter-pill.active{background:var(--grad); color:#fff; border-color:transparent;}
+
+  .stat-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:18px;}
+  .stat-box{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md); padding:14px; text-align:center;}
+  .stat-box span{display:block; font-size:12px; color:var(--ink-dim); margin-bottom:6px;}
+  .stat-box strong{font-size:18px;}
+
+  .hero-stat{background:var(--grad); border-radius:var(--radius-lg); padding:22px 24px; display:flex; align-items:center; justify-content:space-between; color:#fff; margin-top:18px;}
+  .hero-stat span{font-size:13px; opacity:0.85;}
+  .hero-stat strong{display:block; font-size:26px; margin:4px 0;}
+  .hero-stat p{font-size:12.5px; opacity:0.9;}
+  .hero-ring{width:56px; height:56px; border-radius:50%; background:rgba(255,255,255,0.18); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:16px; flex-shrink:0;}
+
+  .bar-row{display:grid; grid-template-columns:140px 1fr 40px; align-items:center; gap:12px; font-size:13px; margin-bottom:12px;}
+  .bar-row:last-child{margin-bottom:0;}
+  .bar-row > span:last-child{text-align:right; color:var(--ink-dim); font-size:12.5px;}
+
+  .profile-card{display:flex; align-items:center; gap:16px; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:22px;}
+  .profile-avatar{width:60px; height:60px; border-radius:50%; background:var(--grad); display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:700; color:#fff; flex-shrink:0;}
+  .profile-card h3{font-size:17px; margin-bottom:3px;}
+  .profile-card span{font-size:13px; color:var(--ink-dim);}
+  .profile-menu{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; margin-top:18px;}
+
+  /* ---------- subtabs (course detail / analytics) ---------- */
+  .subtabs{display:flex; gap:20px; border-bottom:1px solid var(--border); margin:16px 0 2px; overflow-x:auto; scrollbar-width:none;}
+  .subtabs::-webkit-scrollbar{display:none;}
+  .subtab{background:none; border:none; padding:10px 1px; font-size:13.5px; font-weight:600; color:var(--ink-dim); white-space:nowrap; border-bottom:2px solid transparent; margin-bottom:-1px; transition:color .2s, border-color .2s;}
+  .subtab.active{color:var(--ink); border-bottom-color:var(--blue);}
+  .subtab-panel{display:none;}
+  .subtab-panel.active{display:block;}
+
+  /* ---------- profile XP bar ---------- */
+  .xp-bar-wrap{margin-top:8px;}
+  .xp-label{font-size:11.5px; color:var(--ink-faint); display:block; margin-bottom:5px;}
+  .xp-bar-track{height:6px; border-radius:6px; background:var(--surface); overflow:hidden;}
+  .xp-bar-fill{height:100%; background:var(--grad); border-radius:6px;}
+  .profile-menu-item{width:100%; display:flex; align-items:center; gap:12px; background:transparent; border:none; border-bottom:1px solid var(--border);
+    color:var(--ink); padding:15px 18px; font-size:14px; text-align:left;}
+  .profile-menu-item:last-child{border-bottom:none;}
+  .profile-menu-item:hover{background:var(--panel-raised);}
+  .profile-menu-arrow{margin-left:auto; color:var(--ink-faint);}
+
+  .modal-backdrop{position:fixed; inset:0; background:rgba(5,8,20,0.75); display:none; align-items:center; justify-content:center; z-index:200; padding:20px;}
+  .modal-backdrop.show{display:flex;}
+  .modal{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:28px; width:100%; max-width:400px;}
+  .modal h3{font-size:18px; margin-bottom:16px;}
+  .modal .field{margin-bottom:14px;}
+  .modal-actions{display:flex; gap:10px; margin-top:8px;}
+  .modal-actions .btn{flex:1;}
+  .btn-cancel{background:transparent; border:1px solid var(--border); color:var(--ink-dim); padding:12px; border-radius:var(--radius-sm); flex:1;}
+
+  footer{padding:40px 0; text-align:center; color:var(--ink-faint); font-size:12.5px; border-top:1px solid var(--border); margin-top:60px;}
+
+  /* ---------- AI Tutor chat ---------- */
+  .tutor-header{display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;}
+  .tutor-header h2{font-size:22px;}
+  .tutor-messages{
+    display:flex; flex-direction:column; gap:12px;
+    min-height:260px; max-height:56vh; overflow-y:auto;
+    padding:4px 2px 12px;
+  }
+  .tutor-bubble{
+    max-width:82%; padding:11px 15px; border-radius:16px; font-size:14px; line-height:1.5;
+    white-space:pre-wrap; word-break:break-word;
+  }
+  .tutor-bubble.user{
+    align-self:flex-end; background:var(--grad); color:#fff; border-bottom-right-radius:4px;
+  }
+  .tutor-bubble.assistant{
+    align-self:flex-start; background:var(--panel-raised); border:1px solid var(--border);
+    color:var(--ink); border-bottom-left-radius:4px;
+  }
+  .tutor-bubble.pending{color:var(--ink-faint); font-style:italic;}
+  .tutor-quick-actions{display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 14px;}
+  .tutor-chip{
+    background:var(--panel); border:1px solid var(--border); color:var(--ink-dim);
+    padding:7px 14px; border-radius:999px; font-size:12.5px; font-weight:500;
+  }
+  .tutor-chip:hover{border-color:var(--accent-blue,var(--blue)); color:var(--ink);}
+  .tutor-input-row{position:relative; display:flex; align-items:center;}
+  .tutor-input-row input{
+    width:100%; background:var(--panel); border:1px solid var(--border); border-radius:999px;
+    padding:14px 56px 14px 20px; color:var(--ink); font-size:14px;
+  }
+  .tutor-input-row input:focus{border-color:var(--blue); outline:none;}
+  .tutor-send{
+    position:absolute; right:5px; top:50%; transform:translateY(-50%);
+    width:38px; height:38px; border-radius:50%; background:var(--grad); border:none;
+    color:#fff; display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .tutor-send svg{width:16px; height:16px;}
+  .tutor-send:hover{filter:brightness(1.08);}
+  .tutor-send:disabled{opacity:0.5; cursor:not-allowed;}
+
+  /* ---------- bottom tab bar (shown when logged in) ---------- */
+  #bottomNav{
+    display:none; position:fixed; bottom:0; left:0; right:0; z-index:100;
+    background:rgba(10,14,39,0.92); border-top:1px solid var(--border);
+    backdrop-filter:blur(18px) saturate(140%); -webkit-backdrop-filter:blur(18px) saturate(140%);
+    padding:8px 6px calc(8px + env(safe-area-inset-bottom));
+  }
+  #bottomNav.show{display:flex; justify-content:space-around;}
+  .bottom-nav-item{
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+    background:transparent; border:none; color:var(--ink-faint);
+    font-size:11px; font-weight:500; padding:6px 10px; border-radius:12px;
+  }
+  .bottom-nav-item svg{width:20px; height:20px;}
+  .bottom-nav-item.active{color:var(--blue);}
+
+  @media (max-width:860px){
+    nav.links{display:none;}
+    .quick-actions{grid-template-columns:repeat(2,1fr);}
+    .bar-row{grid-template-columns:90px 1fr 34px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-glow"></div>
+
+<header>
+  <div class="nav-inner">
+    <a href="#landing" class="logo" data-nav="landing"><img src="logo.png" alt="IMOWE"><span>IMOWE</span></a>
+    <nav class="links" id="loggedInNav" style="display:none;">
+      <button class="navlink" data-nav="home">Home</button>
+      <button class="navlink" data-nav="learn">Learn</button>
+      <button class="navlink" data-nav="analytics">Analytics</button>
+      <button class="navlink" data-nav="profile">Profile</button>
+    </nav>
+    <div class="nav-actions" id="loggedOutActions">
+      <button class="nav-ghost" data-nav="login">Log In</button>
+      <button class="nav-cta" data-nav="signup">Get Started</button>
+    </div>
+    <div class="nav-actions" id="loggedInActions" style="display:none;">
+      <button class="nav-ghost" id="logoutBtn">Log out</button>
+    </div>
+  </div>
+</header>
+
+<!-- ============ LANDING ============ -->
+<section id="view-landing" class="subview active">
+  <div class="wrap landing-grid">
+    <img src="logo.png" alt="IMOWE logo" class="hero-logo">
+    <h1>IMOWE</h1>
+    <p class="landing-tag">A smarter way to learn.</p>
+    <p class="landing-sub">
+      One connected academic system — your materials, lectures, AI tutor, practice and progress
+      all working from the same understanding of what you actually know.
+    </p>
+    <div class="landing-actions">
+      <button class="btn btn-primary" data-nav="signup">Get Started</button>
+      <button class="btn btn-outline" data-nav="login">Log In</button>
+    </div>
+    <div class="loop-strip">
+      <span class="loop-chip">Capture</span><span class="loop-chip">Understand</span><span class="loop-chip">Learn</span>
+      <span class="loop-chip">Practice</span><span class="loop-chip">Measure</span><span class="loop-chip">Remember</span>
+      <span class="loop-chip">Recommend</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SIGN UP (modal) ============ -->
+<div class="modal-backdrop" id="signupModal">
+  <div class="modal auth-card">
+    <button type="button" class="modal-close" id="signupClose" aria-label="Close">✕</button>
+    <div class="auth-logo-row"><img src="logo.png" alt="IMOWE"><span>IMOWE</span></div>
+    <h2>Create your IMOWE account</h2>
+    <p class="subtitle">Join thousands of students learning smarter every day.</p>
+    <div class="form-error" id="signupError"></div>
+    <form id="signupForm">
+      <div class="field"><label>Full Name</label><input type="text" id="suName" required placeholder="Enter your full name"></div>
+      <div class="field"><label>Email Address</label><input type="email" id="suEmail" required placeholder="Enter your email"></div>
+      <div class="field"><label>Password</label><input type="password" id="suPassword" required minlength="8" placeholder="Create a password"></div>
+      <div class="field"><label>Confirm Password</label><input type="password" id="suConfirm" required placeholder="Confirm your password"></div>
+      <button type="submit" class="btn btn-primary btn-block" id="signupSubmit">Create Account</button>
+    </form>
+    <p class="auth-switch">Already have an account? <button type="button" data-nav="login">Log in</button></p>
+  </div>
+</div>
+
+<!-- ============ LOG IN (modal) ============ -->
+<div class="modal-backdrop" id="loginModal">
+  <div class="modal auth-card">
+    <button type="button" class="modal-close" id="loginClose" aria-label="Close">✕</button>
+    <div class="auth-logo-row"><img src="logo.png" alt="IMOWE"><span>IMOWE</span></div>
+    <h2>Welcome back</h2>
+    <p class="subtitle">Log in to keep your progress moving.</p>
+    <div class="form-error" id="loginError"></div>
+    <form id="loginForm">
+      <div class="field"><label>Email Address</label><input type="email" id="liEmail" required placeholder="Enter your email"></div>
+      <div class="field"><label>Password</label><input type="password" id="liPassword" required placeholder="Enter your password"></div>
+      <button type="submit" class="btn btn-primary btn-block" id="loginSubmit">Log In</button>
+    </form>
+    <p class="auth-switch">New to IMOWE? <button type="button" data-nav="signup">Create an account</button></p>
+  </div>
+</div>
+
+<!-- ============ APP (post-login) ============ -->
+<section id="view-app" class="subview">
+  <div class="wrap">
+
+    <!-- HOME -->
+    <div class="subview active" id="app-home">
+      <div class="home-topbar">
+        <div class="greet">
+          <h2 id="greetName">Good morning 👋</h2>
+          <p>Let's make today productive!</p>
+        </div>
+        <button class="bell-btn" title="Notifications (coming soon)">🔔</button>
+      </div>
+
+      <div class="search-bar">
+        <span>🔍</span>
+        <input type="text" placeholder="Search anything (notes, topics, books...)" disabled>
+      </div>
+
+      <div class="quick-actions">
+        <div class="quick-action" data-nav="learn"><div class="quick-icon">📖</div><span>Study Space</span></div>
+        <div class="quick-action" data-app-tab="tutor"><div class="quick-icon"><img src="logo.png" alt="AI Tutor" class="quick-icon-img"></div><span>AI Tutor</span></div>
+        <div class="quick-action" data-app-tab="record"><div class="quick-icon">🎙️</div><span>Record Lecture</span></div>
+        <div class="quick-action" data-app-tab="meet"><div class="quick-icon">👥</div><span>Meet &amp; Study</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Continue Learning</h3><button class="link" data-nav="learn">View all</button></div>
+        <div id="continueLearning"><p class="muted">Loading…</p></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Today's Plan</h3><span class="muted">3 Tasks</span></div>
+        <p class="muted">Smart Reminders will populate this once the Personalization stage is connected.</p>
+      </div>
+    </div>
+
+    <!-- LEARN / STUDY SPACE -->
+    <div class="subview" id="app-learn">
+      <div class="ss-header">
+        <h2>Study Space</h2>
+        <button class="btn btn-primary" id="addCourseBtn">+ Add Course</button>
+      </div>
+      <div class="ss-filter-tabs" id="ssFilters">
+        <button class="filter-pill" data-filter="">All</button>
+        <button class="filter-pill active" data-filter="current">Current</button>
+        <button class="filter-pill" data-filter="completed">Completed</button>
+        <button class="filter-pill" data-filter="archived">Archived</button>
+      </div>
+      <div id="courseList"><p class="muted">Loading…</p></div>
+    </div>
+
+    <!-- COURSE DETAIL -->
+    <div class="subview" id="app-course">
+      <button class="btn-cancel" id="backToLearn" style="width:auto; padding:8px 16px; margin-bottom:16px;">← Back to Study Space</button>
+      <h2 id="courseTitle">Course</h2>
+
+      <div class="subtabs" id="courseSubtabs">
+        <button class="subtab active" data-course-tab="overview">Overview</button>
+        <button class="subtab" data-course-tab="materials">Materials</button>
+        <button class="subtab" data-course-tab="notes">Notes</button>
+        <button class="subtab" data-course-tab="tests">Tests</button>
+        <button class="subtab" data-course-tab="progress">Progress</button>
+      </div>
+
+      <div class="subtab-panel active" id="courseTab-overview">
+        <div class="hero-stat">
+          <div>
+            <span>Course Progress</span>
+            <strong id="courseProgressPct">0%</strong>
+            <p>You're doing great! Keep going.</p>
+          </div>
+          <div class="hero-ring" id="courseRing"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Study Tools</h3></div>
+          <div class="quick-actions" style="grid-template-columns:repeat(4,1fr);">
+            <div class="quick-action" data-app-tab="tutor"><div class="quick-icon"><img src="logo.png" alt="AI Tutor" class="quick-icon-img"></div><span>AI Tutor</span></div>
+            <div class="quick-action"><div class="quick-icon">📝</div><span>Summary</span></div>
+            <div class="quick-action" data-course-tab-jump="tests"><div class="quick-icon">❓</div><span>Quiz</span></div>
+            <div class="quick-action"><div class="quick-icon">🗂️</div><span>Flashcards</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Course Memory</h3></div>
+          <p class="muted">IMOWE will summarize key concepts here once materials are uploaded and processed.</p>
+        </div>
+      </div>
+
+      <div class="subtab-panel" id="courseTab-materials">
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;">
+          <button class="btn btn-primary" id="addMaterialBtn" style="width:auto; padding:10px 18px;">+ Add Material</button>
+          <button class="btn-outline" id="recordLectureBtn" style="width:auto; padding:10px 18px; border-radius:999px;">🎙️ Record Lecture</button>
+        </div>
+        <div id="courseMaterialsList"><p class="muted">Loading…</p></div>
+      </div>
+
+      <div class="subtab-panel" id="courseTab-notes">
+        <div class="card" style="text-align:center; padding:40px 24px;">
+          <h3 style="margin-bottom:8px;">Notes</h3>
+          <p class="muted">AI-generated notes from your materials and lectures will appear here.</p>
+        </div>
+      </div>
+
+      <div class="subtab-panel" id="courseTab-tests">
+        <div class="card" style="text-align:center; padding:40px 24px;">
+          <h3 style="margin-bottom:8px;">Tests</h3>
+          <p class="muted">Quizzes generated from this course's materials will appear here.</p>
+        </div>
+      </div>
+
+      <div class="subtab-panel" id="courseTab-progress">
+        <div class="hero-stat">
+          <div>
+            <span>Course Progress</span>
+            <strong id="courseProgressPct2">0%</strong>
+            <p>Tracked from quiz results and study activity.</p>
+          </div>
+          <div class="hero-ring" id="courseRing2"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MATERIAL DETAIL -->
+    <div class="subview" id="app-material">
+      <button class="btn-cancel" id="backToMaterials" style="width:auto; padding:8px 16px; margin-bottom:16px;">← Back to Materials</button>
+      <h2 id="materialTitle" style="word-break:break-word;">Material</h2>
+      <p class="muted" id="materialMeta" style="margin-bottom:16px;"></p>
+
+      <div class="quick-actions" style="grid-template-columns:repeat(3,1fr); margin-bottom:14px;">
+        <div class="quick-action" id="materialListenBtn"><div class="quick-icon">🔊</div><span>Listen</span></div>
+        <div class="quick-action" id="materialChatBtn"><div class="quick-icon"><img src="logo.png" alt="AI Tutor" class="quick-icon-img"></div><span>Chat</span></div>
+        <div class="quick-action" id="materialRecordBtn"><div class="quick-icon">🎙️</div><span>Record</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Topics</h3></div>
+        <div id="materialTopics"><p class="muted">—</p></div>
+      </div>
+
+      <div class="card" id="materialLinkedCard" style="display:none;">
+        <div class="card-head"><h3>Linked recordings</h3></div>
+        <div id="materialLinkedList"></div>
+      </div>
+    </div>
+
+    <!-- ANALYTICS -->
+    <div class="subview" id="app-analytics">
+      <h2>Analytics</h2>
+
+      <div id="analyticsEmpty" style="display:none;">
+        <div class="card" style="text-align:center; padding:48px 24px;">
+          <h3 style="margin-bottom:10px;">No analytics yet</h3>
+          <p class="muted">Add a course and start studying — your performance, strengths, and study time will show up here.</p>
+        </div>
+      </div>
+
+      <div id="analyticsContent" style="display:none;">
+        <div class="subtabs" id="analyticsSubtabs">
+          <button class="subtab active" data-analytics-tab="overview">Overview</button>
+          <button class="subtab" data-analytics-tab="performance">Performance</button>
+          <button class="subtab" data-analytics-tab="topics">Topics</button>
+          <button class="subtab" data-analytics-tab="habits">Habits</button>
+        </div>
+
+        <div class="subtab-panel active" id="analyticsTab-overview">
+          <div class="hero-stat">
+            <div><span>Overall Performance</span><strong>Good</strong><p>You're in the top 25% of IMOWE users</p></div>
+            <div class="hero-ring">B+</div>
+          </div>
+          <div class="stat-grid">
+            <div class="stat-box"><span>Courses</span><strong id="statCourses">–</strong></div>
+            <div class="stat-box"><span>Avg. Score</span><strong>78%</strong></div>
+            <div class="stat-box"><span>Study Time</span><strong>32h 45m</strong></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Strengths</h3></div>
+            <div class="bar-row"><span>Media Theories</span><div class="progress-track"><div class="progress-fill good" style="width:92%"></div></div><span>92%</span></div>
+            <div class="bar-row"><span>Research Methods</span><div class="progress-track"><div class="progress-fill good" style="width:85%"></div></div><span>85%</span></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Needs Improvement</h3></div>
+            <div class="bar-row"><span>Statistics</span><div class="progress-track"><div class="progress-fill warn" style="width:62%"></div></div><span>62%</span></div>
+            <div class="bar-row"><span>Sampling Techniques</span><div class="progress-track"><div class="progress-fill warn" style="width:58%"></div></div><span>58%</span></div>
+          </div>
+          <p class="muted" style="margin-top:12px;">Strengths/weaknesses shown here are placeholder data until the Academic Intelligence stage is connected.</p>
+        </div>
+
+        <div class="subtab-panel" id="analyticsTab-performance">
+          <div class="card" style="text-align:center; padding:40px 24px;">
+            <h3 style="margin-bottom:8px;">Performance over time</h3>
+            <p class="muted">Score trends across quizzes and study sessions will appear here.</p>
+          </div>
+        </div>
+
+        <div class="subtab-panel" id="analyticsTab-topics">
+          <div class="card" style="text-align:center; padding:40px 24px;">
+            <h3 style="margin-bottom:8px;">Topics</h3>
+            <p class="muted">A full mastery breakdown by topic will appear here.</p>
+          </div>
+        </div>
+
+        <div class="subtab-panel" id="analyticsTab-habits">
+          <div class="card" style="text-align:center; padding:40px 24px;">
+            <h3 style="margin-bottom:8px;">Study habits</h3>
+            <p class="muted">Study streaks, consistency, and session patterns will appear here.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROFILE -->
+    <div class="subview" id="app-profile">
+      <div class="profile-card">
+        <div class="profile-avatar" id="profileInitial">?</div>
+        <div style="flex:1; min-width:0;">
+          <h3 id="profileName">—</h3>
+          <span id="profileProgramme">Add your programme in Academic Profile</span>
+          <div class="xp-bar-wrap">
+            <span class="xp-label" id="profileXpLabel">Level 1 · 0 XP</span>
+            <div class="xp-bar-track"><div class="xp-bar-fill" id="profileXpFill" style="width:0%"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="profile-menu">
+        <button class="profile-menu-item"><span>🎓</span><span>Academic Profile</span><span class="profile-menu-arrow">›</span></button>
+        <button class="profile-menu-item"><span>🎯</span><span>Learning Goals</span><span class="profile-menu-arrow">›</span></button>
+        <button class="profile-menu-item"><span>⚙️</span><span>Settings</span><span class="profile-menu-arrow">›</span></button>
+        <button class="profile-menu-item"><span>🔔</span><span>Notification Preferences</span><span class="profile-menu-arrow">›</span></button>
+        <button class="profile-menu-item"><span>🔒</span><span>Privacy &amp; Security</span><span class="profile-menu-arrow">›</span></button>
+        <button class="profile-menu-item"><span>❓</span><span>Help &amp; Support</span><span class="profile-menu-arrow">›</span></button>
+        <button class="profile-menu-item"><span>ℹ️</span><span>About IMOWE</span><span class="profile-menu-arrow">›</span></button>
+        <button class="profile-menu-item" id="profileLogoutBtn"><span>🚪</span><span>Log out</span><span class="profile-menu-arrow">›</span></button>
+      </div>
+    </div>
+
+    <!-- AI TUTOR -->
+    <div class="subview" id="app-tutor">
+      <div class="tutor-header">
+        <h2 id="tutorTitle">AI Tutor</h2>
+        <div style="display:flex; gap:8px;">
+          <button class="btn-cancel" id="tutorHistoryBtn" style="width:auto; padding:8px 12px;" title="Chat history">📜</button>
+          <button class="btn-cancel" id="tutorNewChat" style="width:auto; padding:8px 16px;">New Chat</button>
+        </div>
+      </div>
+      <div class="tutor-messages" id="tutorMessages">
+        <p class="muted" id="tutorEmptyState">Ask me anything about your courses — or just say hi.</p>
+      </div>
+      <div class="tutor-quick-actions">
+        <button class="tutor-chip" data-quick="Summarize what we just discussed.">Summarize this</button>
+        <button class="tutor-chip" data-quick="Give me a few examples to help me understand.">Give me examples</button>
+        <button class="tutor-chip" data-quick="Quiz me on this topic.">Quiz me</button>
+      </div>
+      <form class="tutor-input-row" id="tutorForm">
+        <input type="text" id="tutorInput" placeholder="Ask anything..." autocomplete="off">
+        <button type="submit" class="tutor-send" aria-label="Send">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M4 12L20 4L14 20L11 13L4 12Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" fill="currentColor"/></svg>
+        </button>
+      </form>
+    </div>
+
+    <!-- COMING SOON PLACEHOLDER -->
+    <div class="subview" id="app-soon">
+      <div class="card" style="text-align:center; padding:48px 24px;">
+        <h3 id="soonTitle" style="margin-bottom:10px;">Coming soon</h3>
+        <p class="muted" id="soonNote"></p>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<nav id="bottomNav">
+  <button class="bottom-nav-item" data-nav="home">
+    <svg viewBox="0 0 24 24" fill="none"><path d="M3 11.5L12 4l9 7.5M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>Home</span>
+  </button>
+  <button class="bottom-nav-item" data-nav="learn">
+    <svg viewBox="0 0 24 24" fill="none"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4H12v16H6.5A2.5 2.5 0 0 1 4 17.5v-11ZM20 6.5A2.5 2.5 0 0 0 17.5 4H12v16h5.5a2.5 2.5 0 0 0 2.5-2.5v-11Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+    <span>Learn</span>
+  </button>
+  <button class="bottom-nav-item" data-app-tab="library">
+    <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="4.5" height="16" rx="1" stroke="currentColor" stroke-width="1.8"/><rect x="10" y="4" width="4.5" height="16" rx="1" stroke="currentColor" stroke-width="1.8"/><path d="M17 5.2 20 6l-2.8 15-3-.6L17 5.2Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+    <span>Library</span>
+  </button>
+  <button class="bottom-nav-item" data-nav="analytics">
+    <svg viewBox="0 0 24 24" fill="none"><path d="M4 20V10M12 20V4M20 20v-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    <span>Analytics</span>
+  </button>
+  <button class="bottom-nav-item" data-nav="profile">
+    <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M4.5 20c1.4-3.5 4.4-5.5 7.5-5.5s6.1 2 7.5 5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    <span>Profile</span>
+  </button>
+</nav>
+
+<footer>
+  <div class="wrap">IMOWE — A smarter way to learn.</div>
+</footer>
+
+<!-- Add course modal -->
+<div class="modal-backdrop" id="addCourseModal">
+  <form class="modal" id="addCourseForm">
+    <h3>Add a course</h3>
+    <div class="form-error" id="addCourseError"></div>
+    <div class="field"><label>Course title</label><input type="text" id="acTitle" required placeholder="e.g. Mass Communication 101"></div>
+    <div class="field"><label>Subtitle</label><input type="text" id="acSubtitle" placeholder="e.g. Media Theories and Society"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn-cancel" id="addCourseCancel">Cancel</button>
+      <button type="submit" class="btn btn-primary">Add Course</button>
+    </div>
+  </form>
+</div>
+
+<!-- Add material modal -->
+<div class="modal-backdrop" id="addMaterialModal">
+  <form class="modal" id="addMaterialForm">
+    <h3>Add a material</h3>
+    <div class="form-error" id="addMaterialError"></div>
+    <div class="field">
+      <label>File (PDF or text)</label>
+      <input type="file" id="amFile" required accept=".pdf,.txt,text/plain,application/pdf" style="width:100%; background:var(--panel-raised); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 14px; color:var(--ink);">
+    </div>
+    <p class="muted" style="font-size:12px; margin-top:-4px;">IMOWE will extract the text and topics automatically after upload.</p>
+    <div class="modal-actions">
+      <button type="button" class="btn-cancel" id="addMaterialCancel">Cancel</button>
+      <button type="submit" class="btn btn-primary">Upload</button>
+    </div>
+  </form>
+</div>
+
+<!-- Chat history panel -->
+<div class="modal-backdrop" id="historyModal">
+  <div class="modal" style="max-height:80vh; display:flex; flex-direction:column;">
+    <h3 style="margin-bottom:12px;">Chat history</h3>
+    <div id="historyList" style="overflow-y:auto; flex:1; margin-bottom:14px;"><p class="muted">Loading…</p></div>
+    <div class="modal-actions">
+      <button type="button" class="btn-cancel" id="historyClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Record lecture modal -->
+<div class="modal-backdrop" id="recordModal">
+  <div class="modal" style="text-align:center;">
+    <h3 id="recordTitle">Recording lecture…</h3>
+    <div style="font-size:38px; margin:16px 0 8px;">🎙️</div>
+    <div id="recordTimer" style="font-size:22px; font-weight:700; margin-bottom:12px;">00:00</div>
+    <div id="recordTranscriptPreview" style="max-height:130px; overflow-y:auto; text-align:left; background:var(--panel-raised); border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-size:13px; color:var(--ink-dim); margin-bottom:14px; min-height:40px;"></div>
+    <div class="form-error" id="recordError"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn-cancel" id="recordCancel">Cancel</button>
+      <button type="button" class="btn btn-primary" id="recordStop">Stop &amp; Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   CONFIG — point this at your deployed FastAPI backend
+   ========================================================= */
+const API_BASE_URL = "https://imowe.fastapicloud.dev";
+
+/* =========================================================
+   API CLIENT
+   ========================================================= */
+function getToken(){ return localStorage.getItem('imowe_token'); }
+function setToken(t){ localStorage.setItem('imowe_token', t); }
+function clearToken(){ localStorage.removeItem('imowe_token'); }
+
+function formatApiError(detail){
+  if (!detail) return null;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)){
+    return detail.map(d => {
+      if (typeof d === 'string') return d;
+      const field = Array.isArray(d.loc) ? d.loc[d.loc.length - 1] : '';
+      return field ? `${field}: ${d.msg}` : (d.msg || JSON.stringify(d));
+    }).join('; ');
+  }
+  if (typeof detail === 'object' && detail.msg) return detail.msg;
+  return JSON.stringify(detail);
+}
+
+async function apiRequest(path, { method='GET', body, isForm=false } = {}){
+  const headers = {};
+  const token = getToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (!isForm && body) headers['Content-Type'] = 'application/json';
+
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method, headers,
+    body: isForm ? body : (body ? JSON.stringify(body) : undefined),
+  });
+  if (!res.ok){
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(formatApiError(errBody.detail) || `Request failed (${res.status})`);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+const api = {
+  signup: (full_name, email, password) => apiRequest('/auth/signup', { method:'POST', body:{ full_name, email, password } }),
+  login: (email, password) => {
+    const form = new URLSearchParams();
+    form.append('username', email);
+    form.append('password', password);
+    return apiRequest('/auth/login', { method:'POST', body: form, isForm:true });
+  },
+  me: () => apiRequest('/users/me'),
+  listStudySpaces: (statusFilter) => apiRequest(`/study-spaces${statusFilter ? `?status_filter=${statusFilter}` : ''}`),
+  addCourse: (title, subtitle) => apiRequest('/study-spaces', { method:'POST', body:{ title, subtitle } }),
+  getStudySpace: (id) => apiRequest(`/study-spaces/${id}`),
+  listMaterials: (id) => apiRequest(`/study-spaces/${id}/materials`),
+  getMaterial: (studySpaceId, materialId) => apiRequest(`/study-spaces/${studySpaceId}/materials/${materialId}`),
+  addRecording: (studySpaceId, filename, transcript, linkedMaterialId) =>
+    apiRequest(`/study-spaces/${studySpaceId}/materials/recording`, {
+      method: 'POST',
+      body: { filename, transcript, linked_material_id: linkedMaterialId || null }
+    }),
+  addMaterial: (studySpaceId, file) => {
+    const form = new FormData();
+    form.append('file', file);
+    return apiRequest(`/study-spaces/${studySpaceId}/materials`, { method: 'POST', body: form, isForm: true });
+  },
+  listThreads: (studySpaceId, materialId) => apiRequest(`/ai-tutor/threads${materialId ? `?material_id=${materialId}` : (studySpaceId ? `?study_space_id=${studySpaceId}` : '')}`),
+  threadMessages: (threadId) => apiRequest(`/ai-tutor/threads/${threadId}/messages`),
+  deleteThread: (threadId) => apiRequest(`/ai-tutor/threads/${threadId}`, { method: 'DELETE' }),
+};
+
+// Separate from `api` above because it returns raw audio bytes, not JSON.
+async function narrate(text){
+  const token = getToken();
+  const res = await fetch(`${API_BASE_URL}/narration/speak`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify({ text })
+  });
+  if (!res.ok){
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(formatApiError(errBody.detail) || `Request failed (${res.status})`);
+  }
+  return res.blob();
+}
+
+/* =========================================================
+   STATE
+   ========================================================= */
+let currentUser = null;
+let currentCourseId = null;
+let currentMaterials = [];
+let currentMaterialId = null;
+let currentThreadId = null;
+
+/* =========================================================
+   VIEW ROUTER
+   Top-level views: landing, signup, login, app
+   App sub-tabs: home, learn, course, analytics, profile, soon
+   ========================================================= */
+function showView(name){
+  document.querySelectorAll('body > section.subview').forEach(el => el.classList.remove('active'));
+  const target = document.getElementById(`view-${name}`);
+  if (target) target.classList.add('active');
+  window.scrollTo({ top:0, behavior:'instant' in window ? 'instant' : 'auto' });
+}
+
+function showAppTab(tab, options = {}){
+  document.querySelectorAll('#view-app .subview').forEach(el => el.classList.remove('active'));
+  const target = document.getElementById(`app-${tab}`);
+  if (target) target.classList.add('active');
+
+  document.querySelectorAll('#bottomNav .bottom-nav-item').forEach(btn => {
+    const matches = btn.dataset.nav === tab || btn.dataset.appTab === tab;
+    btn.classList.toggle('active', matches);
+  });
+
+  if (tab === 'home') loadHome();
+  if (tab === 'learn') loadCourseList(currentFilter);
+  if (tab === 'analytics') loadAnalyticsHeader();
+  if (tab === 'profile') loadProfile();
+  if (tab === 'material') loadMaterialDetail(options.materialId);
+  if (tab === 'tutor'){
+    currentMaterialId = options.materialId || null;
+    currentThreadId = options.threadId || null;
+    loadTutorMessages();
+  }
+  if (tab === 'soon'){
+    document.getElementById('soonTitle').textContent = options.title || 'Coming soon';
+    document.getElementById('soonNote').textContent = options.note || '';
+  }
+}
+
+function goTo(name){
+  const appTabs = ['home','learn','course','analytics','profile','tutor'];
+  if (appTabs.includes(name)){
+    if (!currentUser){ openAuthModal('login'); return; }
+    showView('app');
+    showAppTab(name);
+    return;
+  }
+  showView(name);
+}
+
+/* Signup/Login are pop-up modals over whatever page is behind them,
+   not separate full-page views. */
+function openAuthModal(type){
+  document.getElementById('signupModal').classList.remove('show');
+  document.getElementById('loginModal').classList.remove('show');
+  document.getElementById(`${type}Modal`).classList.add('show');
+}
+function closeAuthModals(){
+  document.getElementById('signupModal').classList.remove('show');
+  document.getElementById('loginModal').classList.remove('show');
+}
+
+/* Handle all data-nav / data-app-tab clicks in one place */
+document.addEventListener('click', (e) => {
+  const navBtn = e.target.closest('[data-nav]');
+  if (navBtn){
+    e.preventDefault();
+    const target = navBtn.dataset.nav;
+    if (target === 'signup' || target === 'login'){ openAuthModal(target); return; }
+    goTo(target);
+    return;
+  }
+
+  const tabBtn = e.target.closest('[data-app-tab]');
+  if (tabBtn){
+    e.preventDefault();
+    const tab = tabBtn.dataset.appTab;
+    const knownTabs = ['home','learn','analytics','profile','tutor'];
+    if (knownTabs.includes(tab)) goTo(tab);
+    else {
+      const notes = {
+        'record': "Coming in the Lecture & Media stage — recording, transcription and timestamps.",
+        'meet': "Coming in the Collaboration stage — study meetings with classmates.",
+        'library': "Coming in the Learning Core stage — all materials, lectures and notes in one searchable place.",
+      };
+      showView('app');
+      showAppTab('soon', { title: tabBtn.textContent.trim(), note: notes[tab] || '' });
+    }
+  }
+});
+
+/* =========================================================
+   AUTH
+   ========================================================= */
+function updateNavForAuth(){
+  const loggedIn = !!currentUser;
+  document.getElementById('bottomNav').classList.toggle('show', loggedIn);
+}
+
+async function refreshCurrentUser(){
+  try{
+    currentUser = await api.me();
+  }catch{
+    currentUser = null;
+    clearToken();
+  }
+  updateNavForAuth();
+}
+
+document.getElementById('signupForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorBox = document.getElementById('signupError');
+  errorBox.classList.remove('show');
+
+  const password = document.getElementById('suPassword').value;
+  const confirm = document.getElementById('suConfirm').value;
+  if (password !== confirm){
+    errorBox.textContent = "Passwords don't match.";
+    errorBox.classList.add('show');
+    return;
+  }
+
+  const submitBtn = document.getElementById('signupSubmit');
+  submitBtn.disabled = true; submitBtn.textContent = 'Creating account…';
+  try{
+    const { access_token } = await api.signup(
+      document.getElementById('suName').value,
+      document.getElementById('suEmail').value,
+      password
+    );
+    setToken(access_token);
+    await refreshCurrentUser();
+    closeAuthModals();
+    goTo('home');
+  }catch(err){
+    errorBox.textContent = err.message;
+    errorBox.classList.add('show');
+  }finally{
+    submitBtn.disabled = false; submitBtn.textContent = 'Create Account';
+  }
+});
+
+document.getElementById('signupClose').addEventListener('click', closeAuthModals);
+document.getElementById('signupModal').addEventListener('click', (e) => {
+  if (e.target.id === 'signupModal') closeAuthModals();
+});
+
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorBox = document.getElementById('loginError');
+  errorBox.classList.remove('show');
+
+  const submitBtn = document.getElementById('loginSubmit');
+  submitBtn.disabled = true; submitBtn.textContent = 'Logging in…';
+  try{
+    const { access_token } = await api.login(
+      document.getElementById('liEmail').value,
+      document.getElementById('liPassword').value
+    );
+    setToken(access_token);
+    await refreshCurrentUser();
+    closeAuthModals();
+    goTo('home');
+  }catch(err){
+    errorBox.textContent = err.message;
+    errorBox.classList.add('show');
+  }finally{
+    submitBtn.disabled = false; submitBtn.textContent = 'Log In';
+  }
+});
+
+document.getElementById('loginClose').addEventListener('click', closeAuthModals);
+document.getElementById('loginModal').addEventListener('click', (e) => {
+  if (e.target.id === 'loginModal') closeAuthModals();
+});
+
+document.getElementById('profileLogoutBtn').addEventListener('click', () => {
+  clearToken();
+  currentUser = null;
+  updateNavForAuth();
+  goTo('landing');
+});
+
+/* =========================================================
+   HOME
+   ========================================================= */
+function firstName(fullName){ return fullName ? fullName.split(' ')[0] : 'there'; }
+
+async function loadHome(){
+  document.getElementById('greetName').textContent = `Good morning, ${firstName(currentUser?.full_name)} 👋`;
+
+  const container = document.getElementById('continueLearning');
+  container.innerHTML = '<p class="muted">Loading…</p>';
+  try{
+    const spaces = await api.listStudySpaces('current');
+    if (!spaces.length){
+      container.innerHTML = `<p class="muted">No courses yet — add one from Study Space to get started.</p>`;
+      return;
+    }
+    const s = spaces[0];
+    container.innerHTML = `
+      <div class="course-row" style="cursor:pointer;" data-open-course="${s.id}">
+        <div class="course-cover"></div>
+        <div class="course-info">
+          <strong>${escapeHtml(s.course.title)}</strong>
+          <span>${escapeHtml(s.course.subtitle || '')}</span>
+          <div class="progress-track"><div class="progress-fill" style="width:${s.progress_percent}%"></div></div>
+        </div>
+        <span class="course-pct">${Math.round(s.progress_percent)}%</span>
+      </div>`;
+  }catch{
+    container.innerHTML = '<p class="muted">Could not load your courses. Is the backend running?</p>';
+  }
+}
+
+/* =========================================================
+   STUDY SPACE (LEARN)
+   ========================================================= */
+let currentFilter = 'current';
+
+document.getElementById('ssFilters').addEventListener('click', (e) => {
+  const btn = e.target.closest('.filter-pill');
+  if (!btn) return;
+  document.querySelectorAll('#ssFilters .filter-pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  currentFilter = btn.dataset.filter;
+  loadCourseList(currentFilter);
+});
+
+async function loadCourseList(statusFilter){
+  const container = document.getElementById('courseList');
+  container.innerHTML = '<p class="muted">Loading…</p>';
+  try{
+    const spaces = await api.listStudySpaces(statusFilter || undefined);
+    if (!spaces.length){
+      container.innerHTML = '<p class="muted">No courses here yet. Add your first one above.</p>';
+      return;
+    }
+    container.innerHTML = spaces.map(s => `
+      <div class="course-row" style="cursor:pointer; margin-bottom:8px; background:var(--panel); border:1px solid var(--border); border-radius:16px;" data-open-course="${s.id}">
+        <div class="course-cover"></div>
+        <div class="course-info">
+          <strong>${escapeHtml(s.course.title)}</strong>
+          <span>${escapeHtml(s.course.subtitle || '')}</span>
+          <div class="progress-track"><div class="progress-fill" style="width:${s.progress_percent}%"></div></div>
+        </div>
+        <span class="course-pct">${Math.round(s.progress_percent)}%</span>
+      </div>`).join('');
+  }catch{
+    container.innerHTML = '<p class="muted">Could not load your courses.</p>';
+  }
+}
+
+document.addEventListener('click', (e) => {
+  const row = e.target.closest('[data-open-course]');
+  if (row) openCourse(row.dataset.openCourse);
+});
+
+document.getElementById('backToLearn').addEventListener('click', () => goTo('learn'));
+
+async function openCourse(id){
+  currentCourseId = id;
+  showView('app');
+  showAppTab('course');
+  document.getElementById('courseTitle').textContent = 'Loading…';
+
+  // reset to the Overview tab each time a course is opened
+  document.querySelectorAll('#courseSubtabs .subtab').forEach(b => b.classList.remove('active'));
+  document.querySelector('#courseSubtabs .subtab[data-course-tab="overview"]').classList.add('active');
+  document.querySelectorAll('#app-course .subtab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('courseTab-overview').classList.add('active');
+  document.getElementById('courseMaterialsList').innerHTML = '<p class="muted">Loading…</p>';
+
+  try{
+    const s = await api.getStudySpace(id);
+    document.getElementById('courseTitle').textContent = s.course.title;
+    document.getElementById('courseProgressPct').textContent = `${Math.round(s.progress_percent)}%`;
+    document.getElementById('courseRing').textContent = `${Math.round(s.progress_percent)}%`;
+    document.getElementById('courseProgressPct2').textContent = `${Math.round(s.progress_percent)}%`;
+    document.getElementById('courseRing2').textContent = `${Math.round(s.progress_percent)}%`;
+  }catch{
+    document.getElementById('courseTitle').textContent = 'Could not load course';
+  }
+}
+
+/* ---------- Course Detail subtabs ---------- */
+document.querySelectorAll('#courseSubtabs .subtab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const key = btn.dataset.courseTab;
+    document.querySelectorAll('#courseSubtabs .subtab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('#app-course .subtab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById(`courseTab-${key}`).classList.add('active');
+    if (key === 'materials') loadCourseMaterials();
+  });
+});
+
+document.querySelectorAll('[data-course-tab-jump]').forEach(el => {
+  el.addEventListener('click', () => {
+    document.querySelector(`#courseSubtabs .subtab[data-course-tab="${el.dataset.courseTabJump}"]`)?.click();
+  });
+});
+
+async function loadCourseMaterials(){
+  const container = document.getElementById('courseMaterialsList');
+  container.innerHTML = '<p class="muted">Loading…</p>';
+  try{
+    const materials = await api.listMaterials(currentCourseId);
+    currentMaterials = materials;
+    if (!materials.length){
+      container.innerHTML = '<p class="muted">No materials uploaded yet.</p>';
+      return;
+    }
+    container.innerHTML = materials.map(m => {
+      const icon = m.material_type === 'recording' ? '🎙️' : '📄';
+      const linked = m.linked_material_id ? currentMaterials.find(x => x.id === m.linked_material_id) : null;
+      const statusNote = m.status === 'processing' ? ' · processing…' : m.status === 'failed' ? ' · processing failed' : '';
+      const linkedNote = linked ? ` · linked to ${escapeHtml(linked.filename)}` : '';
+      return `
+        <div class="course-row" style="margin-bottom:8px; background:var(--panel); border:1px solid var(--border); border-radius:16px; cursor:pointer;" data-open-material="${m.id}">
+          <div class="course-cover" style="display:flex; align-items:center; justify-content:center; font-size:18px;">${icon}</div>
+          <div class="course-info">
+            <strong>${escapeHtml(m.filename)}</strong>
+            <span>${m.created_at ? new Date(m.created_at).toLocaleDateString() : ''}${statusNote}${linkedNote}</span>
+          </div>
+          <button class="narrate-btn" data-narrate-id="${m.id}" title="Listen">🔊</button>
+        </div>
+      `;
+    }).join('');
+  }catch{
+    container.innerHTML = '<p class="muted">Could not load materials.</p>';
+  }
+}
+
+document.addEventListener('click', (e) => {
+  const row = e.target.closest('[data-open-material]');
+  if (!row || e.target.closest('[data-narrate-id]')) return;
+  openMaterial(row.dataset.openMaterial);
+});
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-narrate-id]');
+  if (!btn) return;
+  e.stopPropagation();
+  const material = currentMaterials.find(m => String(m.id) === btn.dataset.narrateId);
+  if (!material) return;
+  if (!material.extracted_text){
+    alert("This material doesn't have any readable text yet (still processing, or nothing could be extracted).");
+    return;
+  }
+
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳';
+  try{
+    const blob = await narrate(material.extracted_text);
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.addEventListener('ended', () => URL.revokeObjectURL(url));
+    audio.addEventListener('error', () => URL.revokeObjectURL(url));
+    await audio.play();
+  }catch(err){
+    alert(`Couldn't generate narration: ${err.message}`);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+});
+
+
+/* ---------- Analytics subtabs ---------- */
+document.querySelectorAll('#analyticsSubtabs .subtab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const key = btn.dataset.analyticsTab;
+    document.querySelectorAll('#analyticsSubtabs .subtab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('#analyticsContent .subtab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById(`analyticsTab-${key}`).classList.add('active');
+  });
+});
+
+/* Add course modal */
+const addCourseModal = document.getElementById('addCourseModal');
+document.getElementById('addCourseBtn').addEventListener('click', () => addCourseModal.classList.add('show'));
+document.getElementById('addCourseCancel').addEventListener('click', () => addCourseModal.classList.remove('show'));
+addCourseModal.addEventListener('click', (e) => { if (e.target === addCourseModal) addCourseModal.classList.remove('show'); });
+
+document.getElementById('addCourseForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorBox = document.getElementById('addCourseError');
+  errorBox.classList.remove('show');
+  try{
+    await api.addCourse(
+      document.getElementById('acTitle').value,
+      document.getElementById('acSubtitle').value
+    );
+    addCourseModal.classList.remove('show');
+    document.getElementById('addCourseForm').reset();
+    loadCourseList(currentFilter);
+  }catch(err){
+    errorBox.textContent = err.message;
+    errorBox.classList.add('show');
+  }
+});
+
+/* Add material modal */
+const addMaterialModal = document.getElementById('addMaterialModal');
+document.getElementById('addMaterialBtn').addEventListener('click', () => addMaterialModal.classList.add('show'));
+document.getElementById('addMaterialCancel').addEventListener('click', () => addMaterialModal.classList.remove('show'));
+addMaterialModal.addEventListener('click', (e) => { if (e.target === addMaterialModal) addMaterialModal.classList.remove('show'); });
+
+document.getElementById('addMaterialForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorBox = document.getElementById('addMaterialError');
+  errorBox.classList.remove('show');
+  const fileInput = document.getElementById('amFile');
+  const file = fileInput.files[0];
+  if (!file){
+    errorBox.textContent = 'Choose a file first.';
+    errorBox.classList.add('show');
+    return;
+  }
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Uploading…';
+  try{
+    await api.addMaterial(currentCourseId, file);
+    addMaterialModal.classList.remove('show');
+    document.getElementById('addMaterialForm').reset();
+    loadCourseMaterials();
+  }catch(err){
+    errorBox.textContent = err.message;
+    errorBox.classList.add('show');
+  }finally{
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Upload';
+  }
+});
+
+/* ---------- Material Detail ---------- */
+let viewingMaterial = null;
+
+async function loadMaterialDetail(id){
+  document.getElementById('materialTitle').textContent = 'Loading…';
+  document.getElementById('materialMeta').textContent = '';
+  document.getElementById('materialTopics').innerHTML = '<p class="muted">—</p>';
+  document.getElementById('materialLinkedCard').style.display = 'none';
+  viewingMaterial = null;
+  try{
+    const m = await api.getMaterial(currentCourseId, id);
+    viewingMaterial = m;
+    document.getElementById('materialTitle').textContent = m.filename;
+
+    const typeLabel = m.material_type === 'recording' ? 'Lecture recording' : 'Document';
+    const statusLabel = m.status === 'processing' ? 'Processing…' : m.status === 'failed' ? 'Processing failed' : 'Ready';
+    document.getElementById('materialMeta').textContent =
+      `${typeLabel} · ${statusLabel}${m.created_at ? ' · ' + new Date(m.created_at).toLocaleDateString() : ''}`;
+
+    let topics = [];
+    try{ topics = m.extracted_topics ? JSON.parse(m.extracted_topics) : []; }catch{}
+    document.getElementById('materialTopics').innerHTML = topics.length
+      ? topics.map(t => `<span class="filter-pill" style="display:inline-block; margin:0 6px 6px 0;">${escapeHtml(t)}</span>`).join('')
+      : '<p class="muted">No topics extracted yet.</p>';
+
+    const linked = currentMaterials.filter(x => x.linked_material_id === m.id);
+    const linkedCard = document.getElementById('materialLinkedCard');
+    if (linked.length){
+      linkedCard.style.display = '';
+      document.getElementById('materialLinkedList').innerHTML = linked.map(l => `
+        <div class="course-row" style="margin-bottom:8px; background:var(--panel-raised); border:1px solid var(--border); border-radius:14px; cursor:pointer;" data-open-material="${l.id}">
+          <div class="course-cover" style="display:flex; align-items:center; justify-content:center; font-size:16px;">🎙️</div>
+          <div class="course-info"><strong>${escapeHtml(l.filename)}</strong><span>${l.created_at ? new Date(l.created_at).toLocaleDateString() : ''}</span></div>
+        </div>
+      `).join('');
+    } else {
+      linkedCard.style.display = 'none';
+    }
+  }catch{
+    document.getElementById('materialTitle').textContent = 'Could not load material';
+  }
+}
+
+function openMaterial(id){
+  showView('app');
+  showAppTab('material', { materialId: id });
+}
+
+document.getElementById('backToMaterials').addEventListener('click', () => {
+  showAppTab('course');
+  document.querySelector('#courseSubtabs .subtab[data-course-tab="materials"]')?.click();
+});
+
+document.getElementById('materialListenBtn').addEventListener('click', async () => {
+  if (!viewingMaterial) return;
+  if (!viewingMaterial.extracted_text){
+    alert("This material doesn't have any readable text yet (still processing, or nothing could be extracted).");
+    return;
+  }
+  const icon = document.querySelector('#materialListenBtn .quick-icon');
+  const original = icon.textContent;
+  icon.textContent = '⏳';
+  try{
+    const blob = await narrate(viewingMaterial.extracted_text);
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.addEventListener('ended', () => URL.revokeObjectURL(url));
+    await audio.play();
+  }catch(err){
+    alert(`Couldn't generate narration: ${err.message}`);
+  }finally{
+    icon.textContent = original;
+  }
+});
+
+document.getElementById('materialChatBtn').addEventListener('click', () => {
+  if (!viewingMaterial) return;
+  showAppTab('tutor', { materialId: viewingMaterial.id });
+});
+
+document.getElementById('materialRecordBtn').addEventListener('click', () => {
+  if (!viewingMaterial) return;
+  openRecordModal(viewingMaterial.id);
+});
+
+document.getElementById('recordLectureBtn').addEventListener('click', () => {
+  openRecordModal(null);
+});
+
+/* ---------- Recording (browser Speech Recognition - free, no API key) ---------- */
+let recognition = null;
+let recordingTranscript = '';
+let recordingTimerInterval = null;
+let recordingSeconds = 0;
+let recordingLinkedId = null;
+
+function openRecordModal(linkedMaterialId){
+  recordingLinkedId = linkedMaterialId || null;
+  recordingTranscript = '';
+  recordingSeconds = 0;
+  document.getElementById('recordTranscriptPreview').textContent = '';
+  document.getElementById('recordTimer').textContent = '00:00';
+  const errorBox = document.getElementById('recordError');
+  errorBox.classList.remove('show');
+  document.getElementById('recordModal').classList.add('show');
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition){
+    errorBox.textContent = "Your browser doesn't support live transcription. Try Chrome on desktop or Android.";
+    errorBox.classList.add('show');
+    return;
+  }
+
+  recognition = new SpeechRecognition();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = 'en-US';
+
+  recognition.onresult = (event) => {
+    let interim = '';
+    for (let i = event.resultIndex; i < event.results.length; i++){
+      const text = event.results[i][0].transcript;
+      if (event.results[i].isFinal) recordingTranscript += text + ' ';
+      else interim += text;
+    }
+    document.getElementById('recordTranscriptPreview').textContent = recordingTranscript + interim;
+  };
+  recognition.onend = () => {
+    // Browsers auto-stop after pauses - restart seamlessly while the modal is open.
+    if (document.getElementById('recordModal').classList.contains('show') && recognition){
+      try{ recognition.start(); }catch{}
+    }
+  };
+
+  try{
+    recognition.start();
+  }catch{
+    errorBox.textContent = 'Could not access the microphone. Check your browser permissions.';
+    errorBox.classList.add('show');
+  }
+
+  recordingTimerInterval = setInterval(() => {
+    recordingSeconds++;
+    const m = String(Math.floor(recordingSeconds / 60)).padStart(2, '0');
+    const s = String(recordingSeconds % 60).padStart(2, '0');
+    document.getElementById('recordTimer').textContent = `${m}:${s}`;
+  }, 1000);
+}
+
+function stopRecordingCapture(){
+  if (recognition){
+    recognition.onend = null;
+    try{ recognition.stop(); }catch{}
+    recognition = null;
+  }
+  if (recordingTimerInterval){
+    clearInterval(recordingTimerInterval);
+    recordingTimerInterval = null;
+  }
+}
+
+document.getElementById('recordCancel').addEventListener('click', () => {
+  stopRecordingCapture();
+  document.getElementById('recordModal').classList.remove('show');
+});
+
+document.getElementById('recordStop').addEventListener('click', async () => {
+  stopRecordingCapture();
+  const transcript = recordingTranscript.trim();
+  const errorBox = document.getElementById('recordError');
+  if (!transcript){
+    errorBox.textContent = 'No speech was captured — try again closer to the microphone.';
+    errorBox.classList.add('show');
+    return;
+  }
+  const btn = document.getElementById('recordStop');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  try{
+    const filename = `Lecture recording · ${new Date().toLocaleString()}`;
+    await api.addRecording(currentCourseId, filename, transcript, recordingLinkedId);
+    document.getElementById('recordModal').classList.remove('show');
+    await loadCourseMaterials();
+    if (viewingMaterial) await loadMaterialDetail(viewingMaterial.id);
+  }catch(err){
+    errorBox.textContent = err.message;
+    errorBox.classList.add('show');
+  }finally{
+    btn.disabled = false;
+    btn.textContent = 'Stop & Save';
+  }
+});
+
+/* =========================================================
+   ANALYTICS (course count is real, rest is placeholder until
+   the Academic Intelligence stage is connected)
+   ========================================================= */
+async function loadAnalyticsHeader(){
+  const emptyEl = document.getElementById('analyticsEmpty');
+  const contentEl = document.getElementById('analyticsContent');
+  try{
+    const spaces = await api.listStudySpaces();
+    if (spaces.length === 0){
+      emptyEl.style.display = 'block';
+      contentEl.style.display = 'none';
+    } else {
+      emptyEl.style.display = 'none';
+      contentEl.style.display = 'block';
+      document.getElementById('statCourses').textContent = spaces.length;
+    }
+  }catch{
+    emptyEl.style.display = 'block';
+    contentEl.style.display = 'none';
+  }
+}
+
+/* =========================================================
+   PROFILE
+   ========================================================= */
+function loadProfile(){
+  if (!currentUser) return;
+  document.getElementById('profileName').textContent = currentUser.full_name;
+  document.getElementById('profileInitial').textContent = (currentUser.full_name || '?')[0];
+  const programme = currentUser.academic_profile?.programme;
+  document.getElementById('profileProgramme').textContent = programme || 'Add your programme in Academic Profile';
+
+  // Placeholder until the gamification/XP system is wired up server-side
+  document.getElementById('profileXpLabel').textContent = 'Level 1 · 0 XP';
+  document.getElementById('profileXpFill').style.width = '0%';
+}
+
+/* =========================================================
+   AI TUTOR
+   General conversation only for now (no study_space_id) — course-specific
+   chat can reuse renderTutorMessages/sendTutorMessage once wired from a
+   course page.
+   ========================================================= */
+function renderTutorBubble(role, content){
+  const container = document.getElementById('tutorMessages');
+  const emptyState = document.getElementById('tutorEmptyState');
+  if (emptyState) emptyState.remove();
+  const bubble = document.createElement('div');
+  bubble.className = `tutor-bubble ${role === 'user' ? 'user' : 'assistant'}`;
+  bubble.textContent = content;
+  container.appendChild(bubble);
+  container.scrollTop = container.scrollHeight;
+  return bubble;
+}
+
+async function loadTutorMessages(){
+  const container = document.getElementById('tutorMessages');
+
+  const titleEl = document.getElementById('tutorTitle');
+  if (currentMaterialId){
+    const m = currentMaterials.find(mm => mm.id === currentMaterialId);
+    titleEl.textContent = m ? m.filename : 'AI Tutor';
+  } else {
+    titleEl.textContent = 'AI Tutor';
+  }
+
+  if (!currentThreadId){
+    container.innerHTML = '<p class="muted" id="tutorEmptyState">Ask me anything' + (currentMaterialId ? ' about this material' : ' about your courses') + ' — or just say hi.</p>';
+    return;
+  }
+
+  container.innerHTML = '<p class="muted">Loading…</p>';
+  try{
+    const messages = await api.threadMessages(currentThreadId);
+    container.innerHTML = '';
+    if (!messages.length){
+      container.innerHTML = '<p class="muted" id="tutorEmptyState">Ask me anything' + (currentMaterialId ? ' about this material' : ' about your courses') + ' — or just say hi.</p>';
+      return;
+    }
+    messages.forEach(m => renderTutorBubble(m.role, m.content));
+  }catch{
+    container.innerHTML = '<p class="muted">Could not load the conversation.</p>';
+  }
+}
+
+async function sendTutorMessage(text){
+  if (!text.trim()) return;
+  renderTutorBubble('user', text);
+
+  const container = document.getElementById('tutorMessages');
+  const bubble = document.createElement('div');
+  bubble.className = 'tutor-bubble assistant pending';
+  bubble.textContent = '';
+  container.appendChild(bubble);
+  container.scrollTop = container.scrollHeight;
+
+  try{
+    const token = getToken();
+    const res = await fetch(`${API_BASE_URL}/ai-tutor/chat/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({ message: text, study_space_id: currentMaterialId ? null : currentCourseId, material_id: currentMaterialId, thread_id: currentThreadId })
+    });
+
+    if (!res.ok || !res.body){
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody.detail || `Request failed (${res.status})`);
+    }
+
+    bubble.classList.remove('pending');
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let full = '';
+
+    let hadError = false;
+    const processEvent = (rawLine) => {
+      const line = rawLine.trim();
+      if (!line.startsWith('data:')) return;
+      let payload;
+      try { payload = JSON.parse(line.slice(5).trim()); } catch { return; }
+      if (payload.thread_id){
+        currentThreadId = payload.thread_id;
+      } else if (payload.delta){
+        full += payload.delta;
+        bubble.textContent = full;
+        container.scrollTop = container.scrollHeight;
+      } else if (payload.error){
+        hadError = true;
+        bubble.textContent = `Sorry, something went wrong: ${payload.error}`;
+      }
+    };
+
+    while (true){
+      const { value, done } = await reader.read();
+      if (value) {
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop();
+        parts.forEach(processEvent);
+      }
+      if (done) {
+        buffer += decoder.decode();
+        buffer.split('\n\n').forEach(processEvent);
+        break;
+      }
+    }
+
+    if (!full && !hadError){
+      bubble.textContent = "Hmm, I didn't get a reply — try asking again.";
+    }
+  }catch(err){
+    bubble.classList.remove('pending');
+    bubble.textContent = `Sorry, something went wrong: ${err.message}`;
+  }
+}
+
+document.getElementById('tutorForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const input = document.getElementById('tutorInput');
+  const text = input.value;
+  input.value = '';
+  sendTutorMessage(text);
+});
+
+document.querySelectorAll('.tutor-chip').forEach(chip => {
+  chip.addEventListener('click', () => sendTutorMessage(chip.dataset.quick));
+});
+
+document.getElementById('tutorNewChat').addEventListener('click', () => {
+  currentThreadId = null;
+  document.getElementById('tutorMessages').innerHTML =
+    '<p class="muted" id="tutorEmptyState">Ask me anything' + (currentMaterialId ? ' about this material' : ' about your courses') + ' — or just say hi.</p>';
+  // Nothing is deleted here - the previous conversation (if any) stays
+  // available in History. This just starts a new thread going forward.
+});
+
+/* ---------- Chat history panel ---------- */
+const historyModal = document.getElementById('historyModal');
+
+async function loadHistoryList(){
+  const list = document.getElementById('historyList');
+  list.innerHTML = '<p class="muted">Loading…</p>';
+  try{
+    const threads = await api.listThreads(currentCourseId, currentMaterialId);
+    if (!threads.length){
+      list.innerHTML = '<p class="muted">No past conversations yet.</p>';
+      return;
+    }
+    list.innerHTML = threads.map(t => `
+      <div class="course-row" style="margin-bottom:8px; background:var(--panel-raised); border:1px solid var(--border); border-radius:14px; cursor:pointer;" data-open-thread="${t.id}">
+        <div class="course-cover" style="display:flex; align-items:center; justify-content:center; font-size:16px;">💬</div>
+        <div class="course-info">
+          <strong>${escapeHtml(t.title)}</strong>
+          <span>${new Date(t.updated_at).toLocaleString()}${t.id === currentThreadId ? ' · current' : ''}</span>
+        </div>
+        <button class="narrate-btn" data-delete-thread="${t.id}" title="Delete">🗑️</button>
+      </div>
+    `).join('');
+  }catch{
+    list.innerHTML = '<p class="muted">Could not load history.</p>';
+  }
+}
+
+document.getElementById('tutorHistoryBtn').addEventListener('click', () => {
+  historyModal.classList.add('show');
+  loadHistoryList();
+});
+
+document.getElementById('historyClose').addEventListener('click', () => historyModal.classList.remove('show'));
+historyModal.addEventListener('click', (e) => { if (e.target === historyModal) historyModal.classList.remove('show'); });
+
+document.getElementById('historyList').addEventListener('click', async (e) => {
+  const delBtn = e.target.closest('[data-delete-thread]');
+  if (delBtn){
+    e.stopPropagation();
+    if (!confirm('Delete this conversation? This cannot be undone.')) return;
+    const id = delBtn.dataset.deleteThread;
+    try{
+      await api.deleteThread(id);
+      if (id === currentThreadId){
+        currentThreadId = null;
+        document.getElementById('tutorMessages').innerHTML =
+          '<p class="muted" id="tutorEmptyState">Ask me anything' + (currentMaterialId ? ' about this material' : ' about your courses') + ' — or just say hi.</p>';
+      }
+      loadHistoryList();
+    }catch(err){
+      alert(`Couldn't delete: ${err.message}`);
+    }
+    return;
+  }
+
+  const row = e.target.closest('[data-open-thread]');
+  if (!row) return;
+  currentThreadId = row.dataset.openThread;
+  historyModal.classList.remove('show');
+  await loadTutorMessages();
+});
+
+/* =========================================================
+   UTIL
+   ========================================================= */
+function escapeHtml(str){
+  const div = document.createElement('div');
+  div.textContent = str ?? '';
+  return div.innerHTML;
+}
+
+/* =========================================================
+   INIT
+   ========================================================= */
+(async function init(){
+  if (getToken()){
+    await refreshCurrentUser();
+    if (currentUser) { goTo('home'); return; }
+  }
+  updateNavForAuth();
+  showView('landing');
+})();
+</script>
+</body>
+</html>
