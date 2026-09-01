@@ -273,7 +273,7 @@ async def chat_stream(
         raise HTTPException(status_code=503, detail="AI Tutor isn't configured yet - GEMINI_API_KEY is missing.")
 
     thread_id, system_prompt, contents = _build_context(payload, db, current_user)
-
+    user_id = current_user.id
     async def event_generator():
         # Send the thread_id first - if this was a brand new chat, the
         # frontend needs it immediately to keep sending follow-ups on the
