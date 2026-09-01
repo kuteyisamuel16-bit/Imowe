@@ -100,20 +100,30 @@ class RecordingCreate(BaseModel):
 
 # ---------- AI Tutor ----------
 
+class ChatThreadOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    title: str
+    created_at: datetime
+    updated_at: datetime
+
+
 class ChatMessageIn(BaseModel):
     message: str
     study_space_id: Optional[str] = None
     material_id: Optional[str] = None
+    thread_id: Optional[str] = None
 
 
 class ChatMessageOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
+    thread_id: Optional[str] = None
     role: str
     content: str
     created_at: datetime
-
 
 # ---------- Quiz ----------
 
