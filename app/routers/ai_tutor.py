@@ -236,6 +236,7 @@ async def chat(
         raise HTTPException(status_code=503, detail="AI Tutor isn't configured yet - GEMINI_API_KEY is missing.")
 
     thread_id, system_prompt, contents = _build_context(payload, db, current_user)
+    user_id = current_user.id
 
     try:
         response = await asyncio.wait_for(
@@ -254,10 +255,10 @@ async def chat(
         _raise_for_gemini_error(e)
 
     assistant_msg = models.AIInteraction(
-                user_id=user_id,
-                thread_id=thread_id,
-                role="assistant",
-                content=full_text,
+        user_id=user_id,
+        thread_id=thread_id,
+        role="assistant",
+        content=reply_text,
     )
     db.add(assistant_msg)
     db.commit()
@@ -276,10 +277,8 @@ async def chat_stream(
 
     thread_id, system_prompt, contents = _build_context(payload, db, current_user)
     user_id = current_user.id
+
     async def event_generator():
-        # Send the thread_id first - if this was a brand new chat, the
-        # frontend needs it immediately to keep sending follow-ups on the
-        # same thread instead of creating a new one every message.
         yield f"data: {json.dumps({'thread_id': thread_id})}\n\n"
 
         full_text = ""
@@ -305,7 +304,7 @@ async def chat_stream(
         write_db = SessionLocal()
         try:
             assistant_msg = models.AIInteraction(
-                user_id=current_user.id,
+                user_id=user_id,
                 thread_id=thread_id,
                 role="assistant",
                 content=full_text,
