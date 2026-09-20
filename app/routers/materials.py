@@ -39,8 +39,7 @@ def _get_owned_material(study_space_id: str, material_id: str, db: Session, user
         raise HTTPException(status_code=404, detail="Material not found.")
     return material
 
-log_event(db, current_user.id, study_space.id, "lecture_recorded")
-    return material
+
 def _extract_text(file_path: str, content_type: str | None) -> str:
     try:
         if content_type == "application/pdf" or file_path.lower().endswith(".pdf"):
@@ -79,8 +78,7 @@ def upload_material(
     db.add(material)
     db.commit()
     db.refresh(material)
-log_event(db, current_user.id, study_space.id, "material_uploaded")
-    return material
+
     try:
         text = _extract_text(destination, file.content_type)
         topics = ai.extract_topics(text)
@@ -91,8 +89,9 @@ log_event(db, current_user.id, study_space.id, "material_uploaded")
         material.status = models.MaterialStatus.failed
     db.commit()
     db.refresh(material)
-
+log_event(db, current_user.id, study_space.id, "material_uploaded")
     return material
+    
 
 
 @router.post("/recording", response_model=schemas.MaterialOut, status_code=201)
@@ -136,8 +135,9 @@ def create_recording(
         material.status = models.MaterialStatus.failed
     db.commit()
     db.refresh(material)
-
+log_event(db, current_user.id, study_space.id, "lecture_recorded")
     return material
+    
 
 
 @router.get("", response_model=list[schemas.MaterialOut])
