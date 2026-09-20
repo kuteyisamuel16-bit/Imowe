@@ -191,6 +191,8 @@ def _build_context(payload, db, current_user):
     db.add(user_msg)
     db.commit()
 
+    from app.activity import log_event
+    log_event(db, current_user.id, study_space_id, "tutor_message")
     db.query(models.ChatThread).filter(models.ChatThread.id == thread_id).update({"updated_at": datetime.utcnow()})
     db.commit()
 
