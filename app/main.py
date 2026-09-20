@@ -1,6 +1,7 @@
 from app.routers import narration
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.routers import analytics
 
 from app.database import Base, engine
 from app.config import settings
@@ -31,7 +32,7 @@ app.include_router(materials.router)
 app.include_router(ai_tutor.router)
 app.include_router(quiz.router)
 app.include_router(narration.router)
-
+app.include_router(analytics.router)
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "imowe-api"}
