@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import get_current_user
 from app import models, schemas, ai
+from app.activity import log_event
 
 router = APIRouter(prefix="/study-spaces/{study_space_id}/quiz", tags=["quiz"])
 
@@ -27,11 +28,6 @@ def generate_quiz(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """
-    Study Tools -> Quiz -> 'Practice now'. Builds questions from whatever
-    processed materials exist in this study space. Replaces any previously
-    generated (unattempted) question set for this study space.
-    """
     if not ai.is_configured():
         raise HTTPException(status_code=503, detail="Quiz generation isn't configured yet - GEMINI_API_KEY is missing.")
 
@@ -51,7 +47,6 @@ def generate_quiz(
             detail="No processed materials yet - upload something in the Materials tab first.",
         )
 
-    # Combine each material's extracted topics into one context blob.
     topic_lines = []
     for m in materials:
         if m.extracted_topics:
@@ -66,7 +61,6 @@ def generate_quiz(
     if not generated:
         raise HTTPException(status_code=502, detail="Couldn't generate questions right now - try again.")
 
-    # Clear old unattempted questions for this study space, then insert fresh ones.
     db.query(models.QuizQuestion).filter(models.QuizQuestion.study_space_id == study_space.id).delete()
 
     questions = []
@@ -76,10 +70,13 @@ def generate_quiz(
             question_text=q["question"],
             options=json.dumps(q["options"]),
             correct_index=q["correct_index"],
+            topic=q.get("topic") or "General",
         )
         db.add(question)
         questions.append(question)
     db.commit()
+
+    log_event(db, current_user.id, study_space.id, "quiz_generated")
 
     return [
         schemas.QuizQuestionOut(id=q.id, question_text=q.question_text, options=json.loads(q.options))
@@ -93,7 +90,6 @@ def get_quiz(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """Reload the current question set (e.g. if the student left and came back)."""
     study_space = _get_owned_study_space(study_space_id, db, current_user)
     questions = (
         db.query(models.QuizQuestion)
@@ -114,7 +110,6 @@ def submit_quiz(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """Grades the attempt, reveals correct answers, and logs a QuizAttempt row."""
     study_space = _get_owned_study_space(study_space_id, db, current_user)
 
     answers_by_question = {a.question_id: a.selected_index for a in payload.answers}
@@ -152,5 +147,27 @@ def submit_quiz(
     )
     db.add(attempt)
     db.commit()
+    db.refresh(attempt)
+
+    # Per-question results, tagged by topic - this is what powers the real
+    # Strengths/Needs Improvement breakdown in Analytics.
+    for q in questions:
+        selected = answers_by_question.get(q.id)
+        db.add(models.QuizAttemptAnswer(
+            attempt_id=attempt.id,
+            user_id=current_user.id,
+            study_space_id=study_space.id,
+            topic=q.topic,
+            is_correct=(selected == q.correct_index),
+        ))
+
+    # Course Progress ring reflects the BEST score achieved on this course's quiz.
+    new_score_pct = round((score / len(questions)) * 100) if questions else 0
+    if new_score_pct > study_space.progress_percent:
+        study_space.progress_percent = new_score_pct
+
+    db.commit()
+
+    log_event(db, current_user.id, study_space.id, "quiz_submitted")
 
     return schemas.QuizSubmitResult(score=score, total=len(questions), review=review)
