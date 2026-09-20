@@ -9,6 +9,7 @@ from app.database import get_db
 from app.deps import get_current_user
 from app import models, schemas, ai
 from app.activity import log_event
+
 router = APIRouter(prefix="/study-spaces/{study_space_id}/materials", tags=["materials"])
 
 UPLOAD_DIR = "uploaded_materials"
@@ -89,9 +90,9 @@ def upload_material(
         material.status = models.MaterialStatus.failed
     db.commit()
     db.refresh(material)
-log_event(db, current_user.id, study_space.id, "material_uploaded")
+
+    log_event(db, current_user.id, study_space.id, "material_uploaded")
     return material
-    
 
 
 @router.post("/recording", response_model=schemas.MaterialOut, status_code=201)
@@ -135,9 +136,9 @@ def create_recording(
         material.status = models.MaterialStatus.failed
     db.commit()
     db.refresh(material)
-log_event(db, current_user.id, study_space.id, "lecture_recorded")
+
+    log_event(db, current_user.id, study_space.id, "lecture_recorded")
     return material
-    
 
 
 @router.get("", response_model=list[schemas.MaterialOut])
