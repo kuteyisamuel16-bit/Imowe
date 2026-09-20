@@ -3,7 +3,7 @@ import enum
 from datetime import datetime
 
 from sqlalchemy import (
-    Column, String, Integer, Float, ForeignKey, DateTime, Enum, Text
+    Column, String, Integer, Float, Boolean, ForeignKey, DateTime, Enum, Text
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -119,10 +119,6 @@ class Material(Base):
 
 
 class ChatThread(Base):
-    """
-    One conversation thread (ChatGPT-style history). A material or a course
-    can have many threads; each holds its own AIInteraction messages.
-    """
     __tablename__ = "chat_threads"
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
@@ -137,7 +133,6 @@ class ChatThread(Base):
 
 
 class AIInteraction(Base):
-    """A single message in an AI Tutor conversation, belonging to one ChatThread."""
     __tablename__ = "ai_interactions"
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
@@ -146,7 +141,7 @@ class AIInteraction(Base):
     study_space_id = Column(UUID(as_uuid=False), ForeignKey("study_spaces.id"), nullable=True)
     material_id = Column(UUID(as_uuid=False), ForeignKey("materials.id"), nullable=True)
 
-    role = Column(String(20), nullable=False)  # "user" or "assistant"
+    role = Column(String(20), nullable=False)
     content = Column(Text, nullable=False)
 
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -161,6 +156,7 @@ class QuizQuestion(Base):
     question_text = Column(Text, nullable=False)
     options = Column(Text, nullable=False)
     correct_index = Column(Integer, nullable=False)
+    topic = Column(String(150), nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -174,5 +170,39 @@ class QuizAttempt(Base):
 
     score = Column(Integer, nullable=False)
     total = Column(Integer, nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class QuizAttemptAnswer(Base):
+    """One graded question within a QuizAttempt - what makes a real,
+    per-topic Strengths/Needs Improvement breakdown possible, instead of
+    just an aggregate score per attempt."""
+    __tablename__ = "quiz_attempt_answers"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    attempt_id = Column(UUID(as_uuid=False), ForeignKey("quiz_attempts.id"), nullable=False)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False)
+    study_space_id = Column(UUID(as_uuid=False), ForeignKey("study_spaces.id"), nullable=False)
+
+    topic = Column(String(150), nullable=True)
+    is_correct = Column(Boolean, nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class StudyEvent(Base):
+    """
+    Lightweight activity log - one row per meaningful interaction (quiz
+    attempt, material opened, tutor message sent, narration played, lecture
+    recorded). This is what Weeks Active, study streaks, and approximate
+    study time are computed from - see app/routers/analytics.py.
+    """
+    __tablename__ = "study_events"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False)
+    study_space_id = Column(UUID(as_uuid=False), ForeignKey("study_spaces.id"), nullable=True)
+    event_type = Column(String(50), nullable=False)
 
     created_at = Column(DateTime, default=datetime.utcnow)
