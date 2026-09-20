@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import get_current_user
 from app import models, schemas, ai
-
+from app.activity import log_event
 router = APIRouter(prefix="/study-spaces/{study_space_id}/materials", tags=["materials"])
 
 UPLOAD_DIR = "uploaded_materials"
