@@ -1,14 +1,13 @@
-from app.routers import narration
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import analytics
 
 from app.database import Base, engine
 from app.config import settings
-from app.routers import auth, users, courses, study_spaces, materials, ai_tutor, quiz
+from app.routers import auth, users, courses, study_spaces, materials, ai_tutor, quiz, narration, analytics
 from app import migrations_lite
-migrations_lite.run(engine)
+
 Base.metadata.create_all(bind=engine)
+migrations_lite.run(engine)
 
 app = FastAPI(
     title="IMOWE API",
@@ -33,9 +32,13 @@ app.include_router(ai_tutor.router)
 app.include_router(quiz.router)
 app.include_router(narration.router)
 app.include_router(analytics.router)
+
+
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "imowe-api"}
+
+
 @app.get("/")
 def root():
     return {
