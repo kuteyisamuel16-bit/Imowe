@@ -56,7 +56,12 @@ def generate_quiz(
             except Exception:
                 continue
     context_text = "\n".join(topic_lines) or study_space.course.title
-
+weak = weak_topics(db, current_user.id, study_space.id)
+if weak:
+    context_text = (
+        "PRIORITIZE these topics the student is weak in "
+        f"(make at least half the questions about them): {', '.join(weak)}\n\n" + context_text
+    )
     generated = ai.generate_quiz_questions(context_text, payload.num_questions)
     if not generated:
         raise HTTPException(status_code=502, detail="Couldn't generate questions right now - try again.")
