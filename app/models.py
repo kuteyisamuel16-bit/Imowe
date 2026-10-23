@@ -1,5 +1,6 @@
 import uuid
 import enum
+import UniqueConstraint
 from datetime import datetime
 
 from sqlalchemy import (
@@ -206,3 +207,20 @@ class StudyEvent(Base):
     event_type = Column(String(50), nullable=False)
 
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class MasteryRecord(Base):
+    __tablename__ = "mastery_records"
+    __table_args__ = (
+        UniqueConstraint("user_id", "study_space_id", "topic", name="uq_mastery_user_space_topic"),
+    )
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False)
+    study_space_id = Column(UUID(as_uuid=False), ForeignKey("study_spaces.id"), nullable=False)
+    topic = Column(String(150), nullable=False)
+
+    attempts = Column(Integer, default=0)
+    questions_seen = Column(Integer, default=0)
+    questions_correct = Column(Integer, default=0)
+    mastery_percent = Column(Float, default=0.0)
+    last_seen = Column(DateTime, default=datetime.utcnow)
