@@ -6,6 +6,7 @@ from app.database import get_db
 from app.deps import get_current_user
 from app import models, schemas, ai
 from app.activity import log_event
+from app.mastery import update_mastery, weak_topics
 
 router = APIRouter(prefix="/study-spaces/{study_space_id}/quiz", tags=["quiz"])
 
@@ -56,12 +57,16 @@ def generate_quiz(
             except Exception:
                 continue
     context_text = "\n".join(topic_lines) or study_space.course.title
-weak = weak_topics(db, current_user.id, study_space.id)
-if weak:
-    context_text = (
-        "PRIORITIZE these topics the student is weak in "
-        f"(make at least half the questions about them): {', '.join(weak)}\n\n" + context_text
-    )
+
+    # Adaptive: steer the quiz toward topics this student is weak in.
+    weak = weak_topics(db, current_user.id, study_space.id)
+    if weak:
+        context_text = (
+            "PRIORITIZE these topics the student is weak in "
+            f"(make at least half the questions about them): {', '.join(weak)}\n\n"
+            + context_text
+        )
+
     generated = ai.generate_quiz_questions(context_text, payload.num_questions)
     if not generated:
         raise HTTPException(status_code=502, detail="Couldn't generate questions right now - try again.")
@@ -143,7 +148,7 @@ def submit_quiz(
                 is_correct=is_correct,
             )
         )
-update_mastery(db, current_user.id, study_space.id, questions, answers_by_question)
+
     attempt = models.QuizAttempt(
         user_id=current_user.id,
         study_space_id=study_space.id,
@@ -154,8 +159,7 @@ update_mastery(db, current_user.id, study_space.id, questions, answers_by_questi
     db.commit()
     db.refresh(attempt)
 
-    # Per-question results, tagged by topic - this is what powers the real
-    # Strengths/Needs Improvement breakdown in Analytics.
+    # Per-question results, tagged by topic.
     for q in questions:
         selected = answers_by_question.get(q.id)
         db.add(models.QuizAttemptAnswer(
@@ -165,6 +169,9 @@ update_mastery(db, current_user.id, study_space.id, questions, answers_by_questi
             topic=q.topic,
             is_correct=(selected == q.correct_index),
         ))
+
+    # Update the per-topic mastery estimate (powers Analytics + Today's Plan).
+    update_mastery(db, current_user.id, study_space.id, questions, answers_by_question)
 
     # Course Progress ring reflects the BEST score achieved on this course's quiz.
     new_score_pct = round((score / len(questions)) * 100) if questions else 0
