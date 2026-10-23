@@ -1,10 +1,9 @@
 import uuid
 import enum
-import UniqueConstraint
 from datetime import datetime
 
 from sqlalchemy import (
-    Column, String, Integer, Float, Boolean, ForeignKey, DateTime, Enum, Text
+    Column, String, Integer, Float, Boolean, ForeignKey, DateTime, Enum, Text, UniqueConstraint
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -208,7 +207,13 @@ class StudyEvent(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
+
 class MasteryRecord(Base):
+    """
+    One row per (user, study space, topic). Updated after every quiz submit
+    by app/mastery.py. mastery_percent is a weighted blend of past and
+    latest performance, so it moves as the student improves or slips.
+    """
     __tablename__ = "mastery_records"
     __table_args__ = (
         UniqueConstraint("user_id", "study_space_id", "topic", name="uq_mastery_user_space_topic"),
