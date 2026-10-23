@@ -138,7 +138,7 @@ def submit_quiz(
                 is_correct=is_correct,
             )
         )
-
+update_mastery(db, current_user.id, study_space.id, questions, answers_by_question)
     attempt = models.QuizAttempt(
         user_id=current_user.id,
         study_space_id=study_space.id,
