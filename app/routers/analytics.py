@@ -7,11 +7,13 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import get_current_user
 from app import models
+from app.mastery import WEAK_THRESHOLD
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 
-def _topic_breakdown(db: Session, user_id: str) -> list[dict]:
+def _legacy_topic_breakdown(db: Session, user_id: str) -> list[dict]:
+    """Fallback for students whose quizzes pre-date MasteryRecord."""
     rows = (
         db.query(models.QuizAttemptAnswer)
         .filter(models.QuizAttemptAnswer.user_id == user_id, models.QuizAttemptAnswer.topic.isnot(None))
@@ -29,6 +31,29 @@ def _topic_breakdown(db: Session, user_id: str) -> list[dict]:
             "attempts": s["total"],
         }
         for topic, s in stats.items()
+    ]
+
+
+def _topic_breakdown(db: Session, user_id: str) -> list[dict]:
+    """Per-topic mastery across all of the student's courses."""
+    records = db.query(models.MasteryRecord).filter(models.MasteryRecord.user_id == user_id).all()
+    if not records:
+        return _legacy_topic_breakdown(db, user_id)
+
+    # Same topic can exist in several courses - blend them, weighted by questions seen.
+    agg = defaultdict(lambda: {"weighted": 0.0, "seen": 0})
+    for r in records:
+        weight = max(r.questions_seen or 0, 1)
+        agg[r.topic]["weighted"] += (r.mastery_percent or 0.0) * weight
+        agg[r.topic]["seen"] += weight
+
+    return [
+        {
+            "topic": topic,
+            "score_percent": round(a["weighted"] / a["seen"]),
+            "attempts": a["seen"],
+        }
+        for topic, a in agg.items()
     ]
 
 
@@ -135,3 +160,96 @@ def get_habits(db: Session = Depends(get_db), current_user: models.User = Depend
         "by_type": dict(by_type),
         "estimated_minutes": len(events) * 2,  # rough: ~2 min of engagement per logged action
     }
+
+
+@router.get("/recommendations")
+def get_recommendations(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """
+    Powers Home > Today's Plan. Returns up to 3 concrete next actions:
+      1. Weakest topics (mastery below threshold)
+      2. Courses with processed materials but no quiz taken yet
+      3. A streak nudge if the student hasn't studied today
+    """
+    recs: list[dict] = []
+
+    spaces = (
+        db.query(models.StudySpace)
+        .filter(
+            models.StudySpace.user_id == current_user.id,
+            models.StudySpace.status == models.StudySpaceStatus.current,
+        )
+        .all()
+    )
+    space_by_id = {s.id: s for s in spaces}
+
+    # 1) Weak topics, weakest first
+    weak = (
+        db.query(models.MasteryRecord)
+        .filter(
+            models.MasteryRecord.user_id == current_user.id,
+            models.MasteryRecord.mastery_percent < WEAK_THRESHOLD,
+        )
+        .order_by(models.MasteryRecord.mastery_percent.asc())
+        .all()
+    )
+    for r in weak:
+        space = space_by_id.get(r.study_space_id)
+        if not space:
+            continue
+        recs.append({
+            "type": "review_topic",
+            "title": f"Review {r.topic}",
+            "detail": f"{space.course.title} · mastery {round(r.mastery_percent)}%",
+            "study_space_id": space.id,
+        })
+        if len(recs) >= 3:
+            return {"recommendations": recs}
+
+    # 2) Courses with ready materials but no quiz attempts
+    attempted_space_ids = {
+        row[0]
+        for row in db.query(models.QuizAttempt.study_space_id)
+        .filter(models.QuizAttempt.user_id == current_user.id)
+        .distinct()
+        .all()
+    }
+    for space in spaces:
+        if space.id in attempted_space_ids:
+            continue
+        has_ready_material = (
+            db.query(models.Material.id)
+            .filter(
+                models.Material.study_space_id == space.id,
+                models.Material.status == models.MaterialStatus.processed,
+            )
+            .first()
+        )
+        if has_ready_material:
+            recs.append({
+                "type": "first_quiz",
+                "title": f"Take your first quiz in {space.course.title}",
+                "detail": "Quizzes show IMOWE what you already know.",
+                "study_space_id": space.id,
+            })
+            if len(recs) >= 3:
+                return {"recommendations": recs}
+
+    # 3) Streak nudge
+    today = datetime.utcnow().date()
+    studied_today = (
+        db.query(models.StudyEvent.id)
+        .filter(
+            models.StudyEvent.user_id == current_user.id,
+            models.StudyEvent.created_at >= datetime(today.year, today.month, today.day),
+        )
+        .first()
+    )
+    if not studied_today and spaces:
+        recs.append({
+            "type": "streak",
+            "title": "Do a quick study session today",
+            "detail": "Even 10 minutes keeps your streak alive.",
+            "study_space_id": spaces[0].id,
+        })
+
+    return {"recommendations": recs[:3]}
