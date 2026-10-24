@@ -242,3 +242,25 @@ class NoteOut(BaseModel):
     source_message_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+
+
+# ---------- Video lessons ----------
+
+class VideoGenerateIn(BaseModel):
+    message_id: Optional[str] = None   # the tutor answer to teach (preferred)
+    text: Optional[str] = None         # used only when the answer has no saved id
+    question: Optional[str] = None
+
+
+class VideoSceneOut(BaseModel):
+    heading: str
+    bullets: list[str]
+    narration: str
+
+
+class VideoLessonOut(BaseModel):
+    id: str
+    title: str
+    scenes: list[VideoSceneOut]
+    created_at: Optional[datetime] = None
+    cached: bool = False
