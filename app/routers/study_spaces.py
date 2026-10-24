@@ -162,6 +162,9 @@ def purge_study_space(db: Session, study_space: models.StudySpace) -> list[str]:
         models.QuizQuestion,
         models.MasteryRecord,
         models.StudyEvent,
+        models.Flashcard,
+        models.Note,
+        models.CourseSummary,
     ):
         db.query(model).filter(model.study_space_id == sid).delete(synchronize_session=False)
 
