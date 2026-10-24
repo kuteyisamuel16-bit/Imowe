@@ -19,6 +19,19 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+class MessageResponse(BaseModel):
+    message: str
+
+
 class AcademicProfileOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
