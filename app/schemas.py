@@ -190,3 +190,55 @@ class QuizSubmitResult(BaseModel):
     score: int
     total: int
     review: list[QuizReviewItem]
+
+
+# ---------- Study tools: summary, flashcards, notes ----------
+
+class SummaryOut(BaseModel):
+    summary: Optional[dict] = None   # {overview, key_points, sections, key_terms}
+    updated_at: Optional[datetime] = None
+    stale: bool = False              # materials changed since this summary was made
+
+
+class FlashcardGenerateRequest(BaseModel):
+    count: int = 12
+
+
+class FlashcardReviewIn(BaseModel):
+    known: bool
+
+
+class FlashcardOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    front: str
+    back: str
+    topic: Optional[str] = None
+    times_known: int = 0
+    times_missed: int = 0
+    last_known: Optional[bool] = None
+
+
+class NoteIn(BaseModel):
+    title: Optional[str] = None
+    content: str
+    source: Literal["manual", "tutor"] = "manual"
+    source_message_id: Optional[str] = None
+
+
+class NoteUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+
+
+class NoteOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    title: str
+    content: str
+    source: str
+    source_message_id: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
