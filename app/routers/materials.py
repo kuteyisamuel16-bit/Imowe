@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import get_current_user
 from app import models, schemas, ai, rag
+from app.ratelimit import upload_limit
 from app.activity import log_event
 
 router = APIRouter(prefix="/study-spaces/{study_space_id}/materials", tags=["materials"])
@@ -54,7 +55,7 @@ def _extract_text(file_path: str, content_type: str | None) -> str:
         return ""
 
 
-@router.post("", response_model=schemas.MaterialOut, status_code=201)
+@router.post("", response_model=schemas.MaterialOut, status_code=201, dependencies=[Depends(upload_limit)])
 def upload_material(
     study_space_id: str,
     file: UploadFile = File(...),
@@ -100,7 +101,7 @@ def upload_material(
     return material
 
 
-@router.post("/recording", response_model=schemas.MaterialOut, status_code=201)
+@router.post("/recording", response_model=schemas.MaterialOut, status_code=201, dependencies=[Depends(upload_limit)])
 def create_recording(
     study_space_id: str,
     payload: schemas.RecordingCreate,
