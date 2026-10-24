@@ -13,6 +13,7 @@ from google.genai import types
 from app.database import get_db, SessionLocal
 from app.deps import get_current_user
 from app import models, schemas, rag
+from app.ratelimit import tutor_limit
 from app.config import settings
 
 logger = logging.getLogger("imowe.ai_tutor")
@@ -390,7 +391,7 @@ def _raise_for_gemini_error(e: Exception):
     raise HTTPException(status_code=502, detail=f"AI Tutor request failed: {e}")
 
 
-@router.post("/chat", response_model=schemas.ChatMessageOut)
+@router.post("/chat", response_model=schemas.ChatMessageOut, dependencies=[Depends(tutor_limit)])
 async def chat(
     payload: schemas.ChatMessageIn,
     db: Session = Depends(get_db),
@@ -432,7 +433,7 @@ async def chat(
     return assistant_msg
 
 
-@router.post("/chat/stream")
+@router.post("/chat/stream", dependencies=[Depends(tutor_limit)])
 async def chat_stream(
     payload: schemas.ChatMessageIn,
     db: Session = Depends(get_db),
