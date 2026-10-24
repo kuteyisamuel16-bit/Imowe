@@ -229,3 +229,39 @@ class MasteryRecord(Base):
     questions_correct = Column(Integer, default=0)
     mastery_percent = Column(Float, default=0.0)
     last_seen = Column(DateTime, default=datetime.utcnow)
+
+
+class MaterialChunk(Base):
+    """
+    A slice of a material's text plus its embedding vector (stored as JSON
+    text so no pgvector extension is needed). Powers Course Memory: the AI
+    Tutor retrieves only the chunks relevant to a question - see app/rag.py.
+    """
+    __tablename__ = "material_chunks"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    material_id = Column(UUID(as_uuid=False), ForeignKey("materials.id"), nullable=False, index=True)
+    study_space_id = Column(UUID(as_uuid=False), ForeignKey("study_spaces.id"), nullable=False, index=True)
+
+    chunk_index = Column(Integer, nullable=False)
+    content = Column(Text, nullable=False)
+    embedding = Column(Text, nullable=False)  # JSON list of floats
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class MessageFeedback(Base):
+    """Like / dislike on a tutor reply. One row per (user, message)."""
+    __tablename__ = "message_feedback"
+    __table_args__ = (
+        UniqueConstraint("user_id", "message_id", name="uq_feedback_user_message"),
+    )
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False)
+    message_id = Column(UUID(as_uuid=False), ForeignKey("ai_interactions.id"), nullable=False, index=True)
+
+    rating = Column(String(10), nullable=False)  # "like" | "dislike"
+    reason = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
