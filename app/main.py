@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import Base, engine
 from app.config import settings
-from app.routers import auth, users, courses, study_spaces, materials, ai_tutor, quiz, narration, analytics, study_tools
+from app.routers import auth, users, courses, study_spaces, materials, ai_tutor, quiz, narration, analytics, study_tools, video_lessons
 from app import migrations_lite
 
 Base.metadata.create_all(bind=engine)
@@ -33,6 +33,7 @@ app.include_router(quiz.router)
 app.include_router(narration.router)
 app.include_router(analytics.router)
 app.include_router(study_tools.router)
+app.include_router(video_lessons.router)
 
 
 @app.get("/health")
