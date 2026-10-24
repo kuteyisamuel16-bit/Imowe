@@ -1,20 +1,33 @@
 """
-app/email_service.py - sends transactional email through Resend (https://resend.com).
+app/email_service.py - sends transactional email.
 
-Environment variables (set them on your host; local .env also works if your
-Settings class declares them):
-  RESEND_API_KEY   your Resend API key
-  EMAIL_FROM       e.g. "IMOWE <no-reply@yourdomain.com>"  (domain must be verified in Resend)
-  FRONTEND_URL     where index.html is hosted, e.g. https://yourname.github.io/Imowe/
+Two ways to send, picked automatically from which environment variables exist:
 
-Uses only the standard library, so there is nothing new to install.
+  A) Gmail / any SMTP server (no domain needed - good to start with)
+       SMTP_USER        the Gmail address that sends the emails
+       SMTP_PASSWORD    a Gmail "App password" (NOT your normal password)
+       SMTP_HOST        optional, default smtp.gmail.com
+       SMTP_PORT        optional, default 587 (use 465 for SSL)
+       EMAIL_FROM       optional, default "IMOWE <SMTP_USER>"
+
+  B) Resend (needs a domain you own, verified in Resend - better deliverability)
+       RESEND_API_KEY   your Resend API key
+       EMAIL_FROM       e.g. "IMOWE <no-reply@yourdomain.com>"
+
+  Both need:
+       FRONTEND_URL     where index.html is hosted, e.g. https://yourname.github.io/Imowe/
+
+If both A and B are configured, Resend is used. Only the standard library is
+needed - nothing new to install.
 """
 import html
 import json
 import logging
 import os
+import smtplib
 import urllib.error
 import urllib.request
+from email.message import EmailMessage
 
 try:  # optional fallback to your pydantic Settings object
     from app.config import settings
@@ -35,14 +48,7 @@ def build_reset_link(token: str) -> str:
     return f"{base}/?reset_token={token}"
 
 
-def send_email(to: str, subject: str, html_body: str, text_body: str) -> bool:
-    """Returns True if Resend accepted the message. Never raises."""
-    api_key = _cfg("RESEND_API_KEY")
-    sender = _cfg("EMAIL_FROM")
-    if not api_key or not sender:
-        logger.warning("Email not sent: RESEND_API_KEY or EMAIL_FROM is not configured.")
-        return False
-
+def _send_via_resend(api_key: str, sender: str, to: str, subject: str, html_body: str, text_body: str) -> bool:
     payload = json.dumps({
         "from": sender,
         "to": [to],
@@ -66,7 +72,50 @@ def send_email(to: str, subject: str, html_body: str, text_body: str) -> bool:
     except urllib.error.HTTPError as e:
         logger.error("Resend rejected the email (%s): %s", e.code, e.read().decode("utf-8", "ignore")[:300])
     except Exception:
-        logger.exception("Sending email failed")
+        logger.exception("Sending email via Resend failed")
+    return False
+
+
+def _send_via_smtp(user: str, password: str, sender: str, to: str, subject: str, html_body: str, text_body: str) -> bool:
+    host = _cfg("SMTP_HOST") or "smtp.gmail.com"
+    port = int(_cfg("SMTP_PORT") or 587)
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = sender
+    msg["To"] = to
+    msg.set_content(text_body)
+    msg.add_alternative(html_body, subtype="html")
+    try:
+        if port == 465:
+            server = smtplib.SMTP_SSL(host, port, timeout=15)
+        else:
+            server = smtplib.SMTP(host, port, timeout=15)
+            if (_cfg("SMTP_SECURITY") or "starttls").lower() != "none":
+                server.starttls()
+        with server:
+            server.login(user, password)
+            server.send_message(msg)
+        return True
+    except smtplib.SMTPAuthenticationError:
+        logger.error("SMTP login failed. For Gmail you must use an App Password (needs 2-Step Verification), not your normal password.")
+    except Exception:
+        logger.exception("Sending email via SMTP failed")
+    return False
+
+
+def send_email(to: str, subject: str, html_body: str, text_body: str) -> bool:
+    """Returns True if the email was accepted for delivery. Never raises."""
+    resend_key = _cfg("RESEND_API_KEY")
+    sender = _cfg("EMAIL_FROM")
+    if resend_key and sender:
+        return _send_via_resend(resend_key, sender, to, subject, html_body, text_body)
+
+    smtp_user = _cfg("SMTP_USER")
+    smtp_password = _cfg("SMTP_PASSWORD")
+    if smtp_user and smtp_password:
+        return _send_via_smtp(smtp_user, smtp_password, sender or f"IMOWE <{smtp_user}>", to, subject, html_body, text_body)
+
+    logger.warning("Email not sent: configure SMTP_USER + SMTP_PASSWORD (Gmail) or RESEND_API_KEY + EMAIL_FROM.")
     return False
 
 
