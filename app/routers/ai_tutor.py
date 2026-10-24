@@ -26,6 +26,10 @@ client = genai.Client(
 
 GEMINI_MODEL = "gemini-3.6-flash"
 MAX_TITLE_LEN = 48
+# Materials up to this many characters (~7k words) are sent to Gemini in full, so
+# "what is this about?" and "summarize it" see the whole document. Longer ones
+# use retrieval (relevant excerpts + a topic overview).
+WHOLE_DOC_CHARS = 30000
 
 SYSTEM_PROMPT_BASE = (
     "You are IMOWE's AI Tutor - a friendly, encouraging study assistant for "
@@ -79,6 +83,20 @@ def _make_title(message: str) -> str:
     if not text:
         return "New chat"
     return text if len(text) <= MAX_TITLE_LEN else text[:MAX_TITLE_LEN].rstrip() + "…"
+
+
+def _topics_overview(raw_lists: list[str | None]) -> str:
+    """Merge the JSON topic lists Gemini extracted at upload into one short line."""
+    seen: dict[str, None] = {}
+    for raw in raw_lists:
+        if not raw:
+            continue
+        try:
+            for t in json.loads(raw):
+                seen.setdefault(str(t).strip(), None)
+        except Exception:
+            continue
+    return ", ".join(list(seen)[:20])
 
 
 def _format_excerpts(hits: list[tuple[str, str]]) -> str:
@@ -222,6 +240,7 @@ def _build_context(payload, db, current_user):
     material_id = None
     material_label = None
     material_fallback_text = None
+    topics_line = ""
     course_line = None
 
     if payload.material_id:
@@ -230,6 +249,7 @@ def _build_context(payload, db, current_user):
         study_space_id = material.study_space_id
         material_label = material.filename
         material_fallback_text = material.extracted_text
+        topics_line = _topics_overview([material.extracted_topics])
     elif payload.study_space_id:
         study_space = _get_owned_study_space(payload.study_space_id, db, current_user)
         study_space_id = study_space.id
@@ -238,6 +258,12 @@ def _build_context(payload, db, current_user):
             f" ({study_space.course.subtitle or 'no subtitle set'})."
             " Keep explanations relevant to this course where possible."
         )
+        rows = (
+            db.query(models.Material.extracted_topics)
+            .filter(models.Material.study_space_id == study_space.id)
+            .all()
+        )
+        topics_line = _topics_overview([r[0] for r in rows])
 
     if payload.thread_id:
         thread = _get_owned_thread(payload.thread_id, db, current_user)
@@ -278,11 +304,15 @@ def _build_context(payload, db, current_user):
     )
     history.reverse()
 
-    # ----- Course Memory: retrieve the chunks relevant to this question -----
-    # Short follow-ups ("can you give an example?") embed badly on their own, so
-    # the search query is the student's last two messages together.
+    # ----- Course Memory -----
+    # A whole material that fits is sent in full (best for "what is this about?").
+    # Otherwise retrieve the relevant chunks. Short follow-ups ("can you give an
+    # example?") embed badly alone, so the query is the last two student messages.
+    use_whole = bool(
+        material_id and material_fallback_text and len(material_fallback_text) <= WHOLE_DOC_CHARS
+    )
     hits: list[tuple[str, str]] = []
-    if material_id or study_space_id:
+    if (material_id or study_space_id) and not use_whole:
         recent_user_msgs = [m.content for m in history if m.role == "user"][-2:]
         query = " ".join(recent_user_msgs)[:1000]
         hits = rag.retrieve(
@@ -296,19 +326,29 @@ def _build_context(payload, db, current_user):
     # ----- system prompt -----
     system_prompt = SYSTEM_PROMPT_BASE
     if material_id:
-        if hits:
+        overview = f" Main topics in this material: {topics_line}." if topics_line else ""
+        if use_whole:
             system_prompt += (
-                f" The student is asking about a specific material titled '{material_label}'. "
-                "Answer ONLY using the excerpts below from this material. If the answer isn't "
-                "covered in them, say so honestly instead of guessing.\n\n"
+                f" The student is asking about a specific material titled '{material_label}'."
+                f"{overview} Answer ONLY using the full content below. If the answer isn't "
+                "covered in it, say so honestly instead of guessing.\n\n"
+                f"MATERIAL CONTENT:\n{material_fallback_text}"
+            )
+        elif hits:
+            system_prompt += (
+                f" The student is asking about a specific material titled '{material_label}'."
+                f"{overview} Only some excerpts are shown below, chosen as most relevant to the "
+                "question, so use the topic list to place them in the bigger picture. Answer ONLY "
+                "from this material; if the excerpts don't cover the answer, say so honestly "
+                "instead of guessing.\n\n"
                 f"EXCERPTS:\n{_format_excerpts(hits)}"
             )
         elif material_fallback_text:
-            # Not indexed (e.g. embeddings unavailable) - fall back to raw text.
+            # Long and not indexed (e.g. embeddings unavailable) - fall back to the start of the text.
             system_prompt += (
-                f" The student is asking about a specific material titled '{material_label}'. "
-                "Answer ONLY using the content of this material below. If the answer isn't "
-                "covered in it, say so honestly instead of guessing.\n\n"
+                f" The student is asking about a specific material titled '{material_label}'."
+                f"{overview} Answer ONLY using the beginning of the material below. If the answer "
+                "isn't covered, say so honestly instead of guessing.\n\n"
                 f"MATERIAL CONTENT:\n{material_fallback_text[:12000]}"
             )
         else:
@@ -318,6 +358,8 @@ def _build_context(payload, db, current_user):
             )
     elif course_line:
         system_prompt += course_line
+        if topics_line:
+            system_prompt += f" Topics covered by their uploaded materials: {topics_line}."
         if hits:
             system_prompt += (
                 " Below are excerpts from the student's own uploaded course materials, most "
