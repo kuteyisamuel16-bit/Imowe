@@ -105,6 +105,8 @@ def ip_limit(bucket: str, *rules: Rule, label: str = "this feature"):
 tutor_limit = user_limit("tutor", (15, 60), (150, 24 * 3600), label="the AI Tutor")
 quiz_generate_limit = user_limit("quiz_generate", (5, 600), (30, 24 * 3600), label="quiz generation")
 narration_limit = user_limit("narration", (10, 60), (100, 24 * 3600), label="read aloud")
+# Summarising a whole material costs a Gemini call (plain read-aloud is free), so it is stricter.
+narration_summary_limit = user_limit("narration_summary", (5, 60), (30, 24 * 3600), label="audio summaries")
 upload_limit = user_limit("upload", (10, 3600), (40, 24 * 3600), label="uploads")
 signup_limit = ip_limit("signup", (20, 3600), label="sign-up")
 forgot_password_limit = ip_limit("forgot_password", (5, 3600), label="password reset")
