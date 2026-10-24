@@ -107,6 +107,8 @@ quiz_generate_limit = user_limit("quiz_generate", (5, 600), (30, 24 * 3600), lab
 narration_limit = user_limit("narration", (10, 60), (100, 24 * 3600), label="read aloud")
 # Summarising a whole material costs a Gemini call (plain read-aloud is free), so it is stricter.
 narration_summary_limit = user_limit("narration_summary", (5, 60), (30, 24 * 3600), label="audio summaries")
+summary_generate_limit = user_limit("summary", (3, 600), (20, 24 * 3600), label="summaries")
+flashcard_generate_limit = user_limit("flashcards", (5, 600), (20, 24 * 3600), label="flashcard generation")
 upload_limit = user_limit("upload", (10, 3600), (40, 24 * 3600), label="uploads")
 signup_limit = ip_limit("signup", (20, 3600), label="sign-up")
 forgot_password_limit = ip_limit("forgot_password", (5, 3600), label="password reset")
