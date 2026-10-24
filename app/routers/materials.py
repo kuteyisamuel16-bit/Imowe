@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import get_current_user
-from app import models, schemas, ai
+from app import models, schemas, ai, rag
 from app.activity import log_event
 
 router = APIRouter(prefix="/study-spaces/{study_space_id}/materials", tags=["materials"])
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/study-spaces/{study_space_id}/materials", tags=["mat
 UPLOAD_DIR = "uploaded_materials"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-MAX_STORED_CHARS = 50000  # keep DB rows sane; tutor context already truncates further
+MAX_STORED_CHARS = 50000  # keep DB rows sane; Course Memory chunks this text for retrieval
 
 
 def _get_owned_study_space(study_space_id: str, db: Session, user: models.User) -> models.StudySpace:
@@ -91,6 +91,11 @@ def upload_material(
     db.commit()
     db.refresh(material)
 
+    # Course Memory: chunk + embed so the tutor can retrieve relevant parts.
+    # Fails soft - the material still works (the tutor falls back to raw text).
+    rag.index_material(db, material)
+    db.refresh(material)
+
     log_event(db, current_user.id, study_space.id, "material_uploaded")
     return material
 
@@ -135,6 +140,9 @@ def create_recording(
     except Exception:
         material.status = models.MaterialStatus.failed
     db.commit()
+    db.refresh(material)
+
+    rag.index_material(db, material)
     db.refresh(material)
 
     log_event(db, current_user.id, study_space.id, "lecture_recorded")
