@@ -281,3 +281,53 @@ class PasswordResetToken(Base):
     expires_at = Column(DateTime, nullable=False)
     used_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class CourseSummary(Base):
+    """AI study summary for a whole course, saved so it isn't regenerated on every visit."""
+    __tablename__ = "course_summaries"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    study_space_id = Column(UUID(as_uuid=False), ForeignKey("study_spaces.id"), unique=True, nullable=False, index=True)
+
+    content = Column(Text, nullable=False)       # JSON: overview, key_points, sections, key_terms
+    source_hash = Column(String(64), nullable=False)  # fingerprint of the materials it was built from
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Flashcard(Base):
+    __tablename__ = "flashcards"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False)
+    study_space_id = Column(UUID(as_uuid=False), ForeignKey("study_spaces.id"), nullable=False, index=True)
+
+    front = Column(Text, nullable=False)
+    back = Column(Text, nullable=False)
+    topic = Column(String(150), nullable=True)
+
+    times_known = Column(Integer, default=0)
+    times_missed = Column(Integer, default=0)
+    last_known = Column(Boolean, nullable=True)
+    last_reviewed = Column(DateTime, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Note(Base):
+    """A student's own note for a course - typed by hand or saved from a tutor answer."""
+    __tablename__ = "notes"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False)
+    study_space_id = Column(UUID(as_uuid=False), ForeignKey("study_spaces.id"), nullable=False, index=True)
+
+    title = Column(String(200), nullable=False)
+    content = Column(Text, nullable=False)
+    source = Column(String(20), default="manual")        # "manual" | "tutor"
+    source_message_id = Column(String(36), nullable=True)  # plain id, deliberately not a foreign key
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
