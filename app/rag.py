@@ -22,10 +22,10 @@ logger = logging.getLogger("imowe.rag")
 
 EMBED_MODEL = "gemini-embedding-001"
 EMBED_DIM = 768
-CHUNK_SIZE = 1000      # characters per chunk
-CHUNK_OVERLAP = 150    # characters shared between neighbouring chunks
+CHUNK_SIZE = 2500      # characters per chunk (~2-3 paragraphs: enough context to keep an idea intact)
+CHUNK_OVERLAP = 300    # characters shared between neighbouring chunks
 EMBED_BATCH = 50
-TOP_K = 5
+TOP_K = 6
 MAX_AUTO_INDEX = 10    # materials indexed lazily per question, at most
 FAIL_COOLDOWN = 300    # seconds to stop retrying after an embedding failure
 
