@@ -76,6 +76,10 @@ class StudySpaceProgressUpdate(BaseModel):
     next_up: Optional[str] = None
 
 
+class StudySpaceStatusUpdate(BaseModel):
+    status: Literal["current", "completed", "archived"]
+
+
 class MaterialOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
