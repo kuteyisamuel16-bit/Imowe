@@ -144,3 +144,51 @@ def send_password_reset_email(to: str, full_name: str, link: str) -> bool:
         "If you didn't ask for this, ignore this email and your password stays the same.\n"
     )
     return send_email(to, "Reset your IMOWE password", html_body, text_body)
+
+
+def send_feedback_email(
+    *, issue_text: str, user_name: str, user_email: str,
+    question: str, answer: str, course: str | None, when: str,
+) -> bool:
+    """Tell the app owner about a written dislike. Goes to FEEDBACK_EMAIL, or to SMTP_USER if that isn't set."""
+    to = _cfg("FEEDBACK_EMAIL") or _cfg("SMTP_USER") or _cfg("ADMIN_EMAIL")
+    if not to:
+        logger.warning("Feedback email not sent: set FEEDBACK_EMAIL (or SMTP_USER).")
+        return False
+
+    def esc(t: str, limit: int) -> str:
+        t = (t or "").strip()
+        return html.escape(t[:limit] + ("…" if len(t) > limit else "")).replace("\n", "<br>")
+
+    def plain(t: str, limit: int) -> str:
+        t = (t or "").strip()
+        return t[:limit] + ("…" if len(t) > limit else "")
+
+    issue_head = (issue_text or "").split(":", 1)[0].strip() or "Feedback"
+    subject = f"IMOWE feedback: {issue_head[:60]}"
+    rows = [
+        ("Feedback", esc(issue_text, 800)),
+        ("From", esc(f"{user_name} <{user_email}>", 200)),
+        ("Course", esc(course or "General (no course)", 200)),
+        ("Time", esc(when, 60)),
+        ("Student asked", esc(question or "(not found)", 1200)),
+        ("IMOWE answered", esc(answer, 2500)),
+    ]
+    body_rows = "".join(
+        f'<tr><td style="padding:8px 12px 8px 0;color:#78829B;vertical-align:top;white-space:nowrap;">{k}</td>'
+        f'<td style="padding:8px 0;color:#F8F7F2;line-height:1.5;">{v}</td></tr>' for k, v in rows
+    )
+    html_body = f"""
+<div style="background:#101828;padding:28px 14px;font-family:Arial,Helvetica,sans-serif;">
+  <div style="max-width:560px;margin:0 auto;background:#16203A;border-radius:18px;padding:26px;">
+    <div style="font-size:20px;font-weight:800;color:#F8F7F2;">IMOWE</div>
+    <h2 style="margin:16px 0 10px;font-size:18px;color:#B8F34A;">A student disliked an answer</h2>
+    <table style="border-collapse:collapse;font-size:14px;width:100%;">{body_rows}</table>
+  </div>
+</div>"""
+    text_body = (
+        f"A student disliked an answer.\n\nFeedback: {plain(issue_text, 800)}\n"
+        f"From: {user_name} <{user_email}>\nCourse: {course or 'General (no course)'}\nTime: {when}\n\n"
+        f"Student asked:\n{plain(question, 1200) or '(not found)'}\n\nIMOWE answered:\n{plain(answer, 2500)}\n"
+    )
+    return send_email(to, subject, html_body, text_body)
