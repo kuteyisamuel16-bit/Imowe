@@ -331,3 +331,16 @@ class Note(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class VideoLesson(Base):
+    """A 'slides + voice' lesson made from one tutor answer. Saved so reopening it costs nothing.
+    message_id is a plain string (no foreign key) so deleting chats or courses never gets blocked by it."""
+    __tablename__ = "video_lessons"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False, index=True)
+    message_id = Column(String(36), nullable=True, index=True)
+    title = Column(String(200), nullable=False)
+    content = Column(Text, nullable=False)  # JSON list of scenes
+    created_at = Column(DateTime, default=datetime.utcnow)
