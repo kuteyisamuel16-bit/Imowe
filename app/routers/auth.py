@@ -2,13 +2,13 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app import models, schemas, email_service
+from app import models, schemas, email_service, ratelimit
 from app.security import hash_password, verify_password, create_access_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -23,7 +23,12 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-@router.post("/signup", response_model=schemas.TokenResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/signup",
+    response_model=schemas.TokenResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(ratelimit.signup_limit)],
+)
 def signup(payload: schemas.SignUpRequest, db: Session = Depends(get_db)):
     existing = db.query(models.User).filter(models.User.email == payload.email).first()
     if existing:
@@ -47,7 +52,12 @@ def signup(payload: schemas.SignUpRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=schemas.TokenResponse)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    # slows password guessing: limited per IP + email, so a shared campus Wi-Fi isn't locked out as a whole
+    ratelimit.enforce(
+        f"{ratelimit.client_ip(request)}|{form_data.username.strip().lower()}",
+        "login", ratelimit.LOGIN_RULES, "logging in",
+    )
     user = db.query(models.User).filter(models.User.email == form_data.username).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Incorrect email or password.")
@@ -56,7 +66,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     return schemas.TokenResponse(access_token=token)
 
 
-@router.post("/forgot-password", response_model=schemas.MessageResponse)
+@router.post("/forgot-password", response_model=schemas.MessageResponse, dependencies=[Depends(ratelimit.forgot_password_limit)])
 def forgot_password(
     payload: schemas.ForgotPasswordRequest,
     background_tasks: BackgroundTasks,
