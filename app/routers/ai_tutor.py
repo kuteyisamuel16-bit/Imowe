@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from google import genai
@@ -11,7 +12,7 @@ from google.genai import types
 
 from app.database import get_db, SessionLocal
 from app.deps import get_current_user
-from app import models, schemas
+from app import models, schemas, rag
 from app.config import settings
 
 logger = logging.getLogger("imowe.ai_tutor")
@@ -80,6 +81,10 @@ def _make_title(message: str) -> str:
     return text if len(text) <= MAX_TITLE_LEN else text[:MAX_TITLE_LEN].rstrip() + "…"
 
 
+def _format_excerpts(hits: list[tuple[str, str]]) -> str:
+    return "\n\n---\n\n".join(f"[{filename}]\n{content}" for filename, content in hits)
+
+
 # ---------- Thread management (ChatGPT-style history) ----------
 
 @router.get("/threads", response_model=list[schemas.ChatThreadOut])
@@ -104,12 +109,34 @@ def get_thread_messages(
     current_user: models.User = Depends(get_current_user),
 ):
     _get_owned_thread(thread_id, db, current_user)
-    return (
+    msgs = (
         db.query(models.AIInteraction)
         .filter(models.AIInteraction.thread_id == thread_id)
         .order_by(models.AIInteraction.created_at.asc())
         .all()
     )
+    ratings = {}
+    if msgs:
+        rows = (
+            db.query(models.MessageFeedback)
+            .filter(
+                models.MessageFeedback.user_id == current_user.id,
+                models.MessageFeedback.message_id.in_([m.id for m in msgs]),
+            )
+            .all()
+        )
+        ratings = {r.message_id: r.rating for r in rows}
+    return [
+        schemas.ChatMessageOut(
+            id=m.id,
+            thread_id=m.thread_id,
+            role=m.role,
+            content=m.content,
+            created_at=m.created_at,
+            feedback=ratings.get(m.id),
+        )
+        for m in msgs
+    ]
 
 
 @router.delete("/threads/{thread_id}", status_code=204)
@@ -119,10 +146,62 @@ def delete_thread(
     current_user: models.User = Depends(get_current_user),
 ):
     thread = _get_owned_thread(thread_id, db, current_user)
+    message_ids = db.query(models.AIInteraction.id).filter(models.AIInteraction.thread_id == thread.id)
+    # feedback rows reference the messages, so they have to go first
+    db.query(models.MessageFeedback).filter(
+        models.MessageFeedback.message_id.in_(message_ids)
+    ).delete(synchronize_session=False)
     db.query(models.AIInteraction).filter(models.AIInteraction.thread_id == thread.id).delete(synchronize_session=False)
     db.delete(thread)
     db.commit()
     return None
+
+
+# ---------- Feedback (like / dislike) ----------
+
+@router.put("/messages/{message_id}/feedback", response_model=schemas.FeedbackOut)
+def set_feedback(
+    message_id: str,
+    payload: schemas.FeedbackIn,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    message = (
+        db.query(models.AIInteraction)
+        .filter(
+            models.AIInteraction.id == message_id,
+            models.AIInteraction.user_id == current_user.id,
+            models.AIInteraction.role == "assistant",
+        )
+        .first()
+    )
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found.")
+
+    existing = (
+        db.query(models.MessageFeedback)
+        .filter(models.MessageFeedback.user_id == current_user.id, models.MessageFeedback.message_id == message_id)
+        .first()
+    )
+
+    if payload.rating == "none":
+        if existing:
+            db.delete(existing)
+            db.commit()
+        return schemas.FeedbackOut(message_id=message_id, rating=None)
+
+    if existing:
+        existing.rating = payload.rating
+        existing.reason = payload.reason
+    else:
+        db.add(models.MessageFeedback(
+            user_id=current_user.id,
+            message_id=message_id,
+            rating=payload.rating,
+            reason=payload.reason,
+        ))
+    db.commit()
+    return schemas.FeedbackOut(message_id=message_id, rating=payload.rating)
 
 
 # ---------- Chat ----------
@@ -130,37 +209,31 @@ def delete_thread(
 def _build_context(payload, db, current_user):
     """
     Resolves (or lazily creates) the ChatThread this message belongs to,
-    builds the Gemini system prompt + recent contents, and saves the user's
-    message. Returns plain string IDs (never ORM objects) - touching an ORM
-    object after this function's commit can raise DetachedInstanceError in
-    the streaming endpoint, whose generator runs after the request's DB
-    session has already closed.
+    retrieves the most relevant chunks of the student's materials (Course
+    Memory), builds the Gemini system prompt + recent contents, and saves the
+    user's message.
+
+    Returns (thread_id, system_prompt, contents, sources) - plain strings and
+    lists, never ORM objects: touching an ORM object after this function's
+    commit can raise DetachedInstanceError in the streaming endpoint, whose
+    generator runs after the request's DB session has already closed.
     """
     study_space_id = None
     material_id = None
-    system_prompt = SYSTEM_PROMPT_BASE
+    material_label = None
+    material_fallback_text = None
+    course_line = None
 
     if payload.material_id:
         material = _get_owned_material(payload.material_id, db, current_user)
         material_id = material.id
         study_space_id = material.study_space_id
-        label = material.filename
-        if material.extracted_text:
-            system_prompt += (
-                f" The student is asking about a specific material titled '{label}'. "
-                "Answer ONLY using the content of this material below. If the answer isn't "
-                "covered in it, say so honestly instead of guessing.\n\n"
-                f"MATERIAL CONTENT:\n{material.extracted_text[:12000]}"
-            )
-        else:
-            system_prompt += (
-                f" The student is asking about a material titled '{label}', but it hasn't "
-                "finished processing yet or has no extracted text - let them know."
-            )
+        material_label = material.filename
+        material_fallback_text = material.extracted_text
     elif payload.study_space_id:
         study_space = _get_owned_study_space(payload.study_space_id, db, current_user)
         study_space_id = study_space.id
-        system_prompt += (
+        course_line = (
             f" The student is currently studying '{study_space.course.title}'"
             f" ({study_space.course.subtitle or 'no subtitle set'})."
             " Keep explanations relevant to this course where possible."
@@ -205,6 +278,55 @@ def _build_context(payload, db, current_user):
     )
     history.reverse()
 
+    # ----- Course Memory: retrieve the chunks relevant to this question -----
+    # Short follow-ups ("can you give an example?") embed badly on their own, so
+    # the search query is the student's last two messages together.
+    hits: list[tuple[str, str]] = []
+    if material_id or study_space_id:
+        recent_user_msgs = [m.content for m in history if m.role == "user"][-2:]
+        query = " ".join(recent_user_msgs)[:1000]
+        hits = rag.retrieve(
+            db,
+            query,
+            study_space_id=None if material_id else study_space_id,
+            material_id=material_id,
+        )
+    sources = list(dict.fromkeys(filename for filename, _ in hits))
+
+    # ----- system prompt -----
+    system_prompt = SYSTEM_PROMPT_BASE
+    if material_id:
+        if hits:
+            system_prompt += (
+                f" The student is asking about a specific material titled '{material_label}'. "
+                "Answer ONLY using the excerpts below from this material. If the answer isn't "
+                "covered in them, say so honestly instead of guessing.\n\n"
+                f"EXCERPTS:\n{_format_excerpts(hits)}"
+            )
+        elif material_fallback_text:
+            # Not indexed (e.g. embeddings unavailable) - fall back to raw text.
+            system_prompt += (
+                f" The student is asking about a specific material titled '{material_label}'. "
+                "Answer ONLY using the content of this material below. If the answer isn't "
+                "covered in it, say so honestly instead of guessing.\n\n"
+                f"MATERIAL CONTENT:\n{material_fallback_text[:12000]}"
+            )
+        else:
+            system_prompt += (
+                f" The student is asking about a material titled '{material_label}', but it hasn't "
+                "finished processing yet or has no extracted text - let them know."
+            )
+    elif course_line:
+        system_prompt += course_line
+        if hits:
+            system_prompt += (
+                " Below are excerpts from the student's own uploaded course materials, most "
+                "relevant first. Prefer them when answering, and mention which material an idea "
+                "comes from when it feels natural. If the question isn't covered by them, answer "
+                "from general knowledge but say it isn't in their materials.\n\n"
+                f"EXCERPTS:\n{_format_excerpts(hits)}"
+            )
+
     contents = [
         types.Content(
             role=("user" if m.role == "user" else "model"),
@@ -212,7 +334,7 @@ def _build_context(payload, db, current_user):
         )
         for m in history
     ]
-    return thread_id, system_prompt, contents
+    return thread_id, system_prompt, contents, sources
 
 
 def _raise_for_gemini_error(e: Exception):
@@ -235,7 +357,9 @@ async def chat(
     if not client:
         raise HTTPException(status_code=503, detail="AI Tutor isn't configured yet - GEMINI_API_KEY is missing.")
 
-    thread_id, system_prompt, contents = _build_context(payload, db, current_user)
+    thread_id, system_prompt, contents, _sources = await run_in_threadpool(
+        _build_context, payload, db, current_user
+    )
     user_id = current_user.id
 
     try:
@@ -275,11 +399,16 @@ async def chat_stream(
     if not client:
         raise HTTPException(status_code=503, detail="AI Tutor isn't configured yet - GEMINI_API_KEY is missing.")
 
-    thread_id, system_prompt, contents = _build_context(payload, db, current_user)
+    # Retrieval makes network calls (embeddings), so keep it off the event loop.
+    thread_id, system_prompt, contents, sources = await run_in_threadpool(
+        _build_context, payload, db, current_user
+    )
     user_id = current_user.id
 
     async def event_generator():
         yield f"data: {json.dumps({'thread_id': thread_id})}\n\n"
+        if sources:
+            yield f"data: {json.dumps({'sources': sources})}\n\n"
 
         full_text = ""
         try:
@@ -301,6 +430,7 @@ async def chat_stream(
                 yield f"data: {json.dumps({'error': str(e)})}\n\n"
             return
 
+        message_id = None
         write_db = SessionLocal()
         try:
             assistant_msg = models.AIInteraction(
@@ -311,10 +441,11 @@ async def chat_stream(
             )
             write_db.add(assistant_msg)
             write_db.commit()
+            message_id = assistant_msg.id  # lets the UI attach like/dislike to this reply
         finally:
             write_db.close()
 
-        yield f"data: {json.dumps({'done': True})}\n\n"
+        yield f"data: {json.dumps({'done': True, 'message_id': message_id})}\n\n"
 
     return StreamingResponse(
         event_generator(),
