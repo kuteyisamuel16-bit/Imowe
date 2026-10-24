@@ -9,6 +9,7 @@ import edge_tts
 from app.database import get_db
 from app.deps import get_current_user
 from app import models, ai
+from app.ratelimit import narration_limit, narration_summary_limit
 
 logger = logging.getLogger("imowe.narration")
 
@@ -41,7 +42,7 @@ async def _speak(text: str, voice: str = DEFAULT_VOICE):
     )
 
 
-@router.post("/speak")
+@router.post("/speak", dependencies=[Depends(narration_limit)])
 async def speak(
     payload: NarrationIn,
     current_user: models.User = Depends(get_current_user),
@@ -57,7 +58,7 @@ async def speak(
     return await _speak(text, payload.voice or DEFAULT_VOICE)
 
 
-@router.get("/material/{material_id}")
+@router.get("/material/{material_id}", dependencies=[Depends(narration_summary_limit)])
 async def speak_material_summary(
     material_id: str,
     db: Session = Depends(get_db),
