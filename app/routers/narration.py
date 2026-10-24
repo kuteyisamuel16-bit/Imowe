@@ -16,6 +16,11 @@ logger = logging.getLogger("imowe.narration")
 router = APIRouter(prefix="/narration", tags=["narration"])
 
 DEFAULT_VOICE = "en-US-AriaNeural"
+ALLOWED_VOICES = {
+    "en-US-AriaNeural", "en-US-GuyNeural", "en-US-JennyNeural",
+    "en-NG-EzinneNeural", "en-NG-AbeoNeural",
+    "en-GB-SoniaNeural", "en-GB-RyanNeural", "fr-FR-DeniseNeural",
+}
 MAX_CHARS = 4000
 
 
@@ -55,7 +60,8 @@ async def speak(
     text = (payload.text or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="text is required")
-    return await _speak(text, payload.voice or DEFAULT_VOICE)
+    voice = payload.voice if payload.voice in ALLOWED_VOICES else DEFAULT_VOICE
+    return await _speak(text, voice)
 
 
 @router.get("/material/{material_id}", dependencies=[Depends(narration_summary_limit)])
