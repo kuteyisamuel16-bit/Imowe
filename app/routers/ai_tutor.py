@@ -3,7 +3,7 @@ import json
 import logging
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -12,7 +12,7 @@ from google.genai import types
 
 from app.database import get_db, SessionLocal
 from app.deps import get_current_user
-from app import models, schemas, rag
+from app import models, schemas, rag, email_service
 from app.ratelimit import tutor_limit
 from app.config import settings
 
@@ -182,6 +182,7 @@ def delete_thread(
 def set_feedback(
     message_id: str,
     payload: schemas.FeedbackIn,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
@@ -220,6 +221,37 @@ def set_feedback(
             reason=payload.reason,
         ))
     db.commit()
+
+    # A written dislike is emailed to the app owner (in the background, so the student never waits).
+    reason = (payload.reason or "").strip()
+    if payload.rating == "dislike" and reason:
+        try:
+            question = (
+                db.query(models.AIInteraction.content)
+                .filter(
+                    models.AIInteraction.thread_id == message.thread_id,
+                    models.AIInteraction.role == "user",
+                    models.AIInteraction.created_at <= message.created_at,
+                )
+                .order_by(models.AIInteraction.created_at.desc())
+                .first()
+            ) if message.thread_id else None
+            course = None
+            if message.study_space_id:
+                space = db.query(models.StudySpace).filter(models.StudySpace.id == message.study_space_id).first()
+                course = space.course.title if space and space.course else None
+            background.add_task(
+                email_service.send_feedback_email,
+                issue_text=reason[:800],
+                user_name=current_user.full_name or "A student",
+                user_email=current_user.email,
+                question=question[0] if question else "",
+                answer=message.content or "",
+                course=course,
+                when=(message.created_at or datetime.utcnow()).strftime("%d %b %Y, %H:%M UTC"),
+            )
+        except Exception:
+            logger.exception("Could not queue the feedback email")
     return schemas.FeedbackOut(message_id=message_id, rating=payload.rating)
 
 
