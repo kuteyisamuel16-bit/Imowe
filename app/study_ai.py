@@ -1,160 +1,176 @@
-"""
-app/study_ai.py - Gemini helpers for the study tools (course summary, flashcards).
-
-Uses its own client with a longer timeout than app.ai: these calls read a lot of
-text and write a lot, so they can legitimately take longer than the 20s used for chat.
-"""
-import json
-import logging
+import os
 import re
+import json
+import uuid
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from sqlalchemy.orm import Session
 
-from google import genai
-from google.genai import types
+from app.database import get_db
+from app.deps import get_current_user
+from app import models, schemas, ai, rag, extract
+from app.ratelimit import upload_limit
+from app.activity import log_event
 
-from app.config import settings
-from app.ai import GEMINI_MODEL
+router = APIRouter(prefix="/study-spaces/{study_space_id}/materials", tags=["materials"])
 
-logger = logging.getLogger("imowe.study_ai")
+UPLOAD_DIR = "uploaded_materials"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-_client = genai.Client(
-    api_key=settings.GEMINI_API_KEY,
-    http_options=types.HttpOptions(timeout=60000),
-) if settings.GEMINI_API_KEY else None
-
-
-def is_configured() -> bool:
-    return _client is not None
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB per file
+MAX_STORED_CHARS = 50000  # keep DB rows sane; Course Memory chunks this text for retrieval
 
 
-def parse_json(raw: str | None):
-    """Parse model output as JSON, tolerating code fences or stray text around it."""
-    raw = (raw or "").strip()
-    if raw.startswith("```"):
-        raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.S).strip()
+def _get_owned_study_space(study_space_id: str, db: Session, user: models.User) -> models.StudySpace:
+    study_space = (
+        db.query(models.StudySpace)
+        .filter(models.StudySpace.id == study_space_id, models.StudySpace.user_id == user.id)
+        .first()
+    )
+    if not study_space:
+        raise HTTPException(status_code=404, detail="Study space not found.")
+    return study_space
+
+
+def _get_owned_material(study_space_id: str, material_id: str, db: Session, user: models.User) -> models.Material:
+    study_space = _get_owned_study_space(study_space_id, db, user)
+    material = (
+        db.query(models.Material)
+        .filter(models.Material.id == material_id, models.Material.study_space_id == study_space.id)
+        .first()
+    )
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found.")
+    return material
+
+
+@router.post("", response_model=schemas.MaterialOut, status_code=201, dependencies=[Depends(upload_limit)])
+def upload_material(
+    study_space_id: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    study_space = _get_owned_study_space(study_space_id, db, current_user)
+
+    display_name = os.path.basename(file.filename or "").strip() or "Untitled"
+    ext = os.path.splitext(display_name)[1].lower()
+    if ext not in extract.SUPPORTED:
+        raise HTTPException(status_code=400, detail=extract.unsupported_message(ext))
+
+    safe_name = f"{uuid.uuid4()}_{re.sub(r'[^A-Za-z0-9._-]', '_', display_name)}"
+    destination = os.path.join(UPLOAD_DIR, safe_name)
+    total = 0
+    with open(destination, "wb") as buffer:
+        while chunk := file.file.read(1024 * 1024):
+            total += len(chunk)
+            if total > MAX_UPLOAD_BYTES:
+                break
+            buffer.write(chunk)
+    if total > MAX_UPLOAD_BYTES:
+        os.remove(destination)
+        raise HTTPException(status_code=400, detail=f"That file is too large. The limit is {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.")
+
+    material = models.Material(
+        study_space_id=study_space.id,
+        filename=display_name,
+        file_path=destination,
+        content_type=file.content_type,
+        material_type=models.MaterialType.document,
+        status=models.MaterialStatus.processing,
+    )
+    db.add(material)
+    db.commit()
+    db.refresh(material)
+
     try:
-        return json.loads(raw)
+        text = extract.extract_text(destination, ext)
+        topics = ai.extract_topics(text)
+        material.extracted_text = text[:MAX_STORED_CHARS] if text else None
+        material.extracted_topics = json.dumps(topics)
+        material.status = models.MaterialStatus.processed if topics else models.MaterialStatus.uploaded
     except Exception:
-        pass
-    match = re.search(r"[\[{].*[\]}]", raw, re.S)
-    if match:
-        try:
-            return json.loads(match.group(0))
-        except Exception:
-            pass
-    return None
+        material.status = models.MaterialStatus.failed
+    db.commit()
+    db.refresh(material)
+
+    # Course Memory: chunk + embed so the tutor can retrieve relevant parts.
+    # Fails soft - the material still works (the tutor falls back to raw text).
+    rag.index_material(db, material)
+    db.refresh(material)
+
+    log_event(db, current_user.id, study_space.id, "material_uploaded")
+    return material
 
 
-def _ask_json(prompt: str):
-    response = _client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(response_mime_type="application/json", max_output_tokens=4500),
+@router.post("/recording", response_model=schemas.MaterialOut, status_code=201, dependencies=[Depends(upload_limit)])
+def create_recording(
+    study_space_id: str,
+    payload: schemas.RecordingCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """
+    A lecture recording transcribed client-side (browser Speech Recognition).
+    No audio file is stored - just the resulting text, saved as its own
+    Material so it's isolated from whatever material it was recorded inside,
+    while still linking back to it via linked_material_id.
+    """
+    study_space = _get_owned_study_space(study_space_id, db, current_user)
+
+    if payload.linked_material_id:
+        _get_owned_material(study_space_id, payload.linked_material_id, db, current_user)
+
+    transcript = (payload.transcript or "").strip()
+    material = models.Material(
+        study_space_id=study_space.id,
+        filename=payload.filename,
+        file_path=None,
+        content_type="text/plain",
+        material_type=models.MaterialType.recording,
+        status=models.MaterialStatus.processing,
+        linked_material_id=payload.linked_material_id,
     )
-    return parse_json(response.text)
+    db.add(material)
+    db.commit()
+    db.refresh(material)
 
-
-def _strs(value, limit: int, max_len: int = 400) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    out = []
-    for item in value:
-        text = str(item).strip()
-        if text:
-            out.append(text[:max_len])
-        if len(out) >= limit:
-            break
-    return out
-
-
-def clean_summary(data) -> dict | None:
-    if not isinstance(data, dict):
-        return None
-    overview = str(data.get("overview", "")).strip()[:1500]
-    key_points = _strs(data.get("key_points"), 12)
-
-    sections = []
-    for sec in (data.get("sections") if isinstance(data.get("sections"), list) else [])[:8]:
-        if not isinstance(sec, dict):
-            continue
-        title = str(sec.get("title", "")).strip()[:150]
-        points = _strs(sec.get("points"), 8)
-        if title and points:
-            sections.append({"title": title, "points": points})
-
-    terms = []
-    for t in (data.get("key_terms") if isinstance(data.get("key_terms"), list) else [])[:12]:
-        if not isinstance(t, dict):
-            continue
-        term = str(t.get("term", "")).strip()[:100]
-        meaning = str(t.get("meaning", "")).strip()[:400]
-        if term and meaning:
-            terms.append({"term": term, "meaning": meaning})
-
-    if not overview and not key_points:
-        return None
-    return {"overview": overview, "key_points": key_points, "sections": sections, "key_terms": terms}
-
-
-def clean_flashcards(data, limit: int) -> list[dict]:
-    if isinstance(data, dict):  # some replies wrap the list: {"flashcards": [...]}
-        data = next((v for v in data.values() if isinstance(v, list)), [])
-    if not isinstance(data, list):
-        return []
-    cards = []
-    for item in data:
-        if not isinstance(item, dict):
-            continue
-        front = str(item.get("front", "")).strip()[:400]
-        back = str(item.get("back", "")).strip()[:800]
-        topic = str(item.get("topic", "")).strip()[:150] or "General"
-        if front and back:
-            cards.append({"front": front, "back": back, "topic": topic})
-        if len(cards) >= limit:
-            break
-    return cards
-
-
-def generate_summary(material_text: str, course_title: str, topics: list[str]) -> dict | None:
-    if not _client or not material_text.strip():
-        return None
-    topic_hint = f"Topics already identified in these materials: {', '.join(topics)}.\n" if topics else ""
-    prompt = (
-        f"You are preparing a study summary of the course '{course_title}' for a university student, "
-        "based ONLY on the material below. Do not add facts that are not in the material.\n"
-        f"{topic_hint}"
-        "Respond with ONLY valid JSON in exactly this shape:\n"
-        '{"overview": "2-4 sentences saying what the material is about and why it matters", '
-        '"key_points": ["5-10 short, self-contained takeaways"], '
-        '"sections": [{"title": "a main theme", "points": ["2-5 short points"]}], '
-        '"key_terms": [{"term": "...", "meaning": "a plain-language definition"}]}\n'
-        "Use 2-6 sections and up to 10 key terms. Write clearly, as if explaining to a first-year student.\n\n"
-        f"MATERIAL:\n{material_text}"
-    )
     try:
-        return clean_summary(_ask_json(prompt))
+        topics = ai.extract_topics(transcript)
+        material.extracted_text = transcript[:MAX_STORED_CHARS] if transcript else None
+        material.extracted_topics = json.dumps(topics)
+        material.status = models.MaterialStatus.processed if topics else models.MaterialStatus.uploaded
     except Exception:
-        logger.exception("Summary generation failed")
-        return None
+        material.status = models.MaterialStatus.failed
+    db.commit()
+    db.refresh(material)
+
+    rag.index_material(db, material)
+    db.refresh(material)
+
+    log_event(db, current_user.id, study_space.id, "lecture_recorded")
+    return material
 
 
-def generate_flashcards(material_text: str, topics: list[str], count: int) -> list[dict]:
-    if not _client or not material_text.strip():
-        return []
-    topic_hint = (
-        "Give each card a 'topic'; where one fits, use EXACTLY one of these existing topic names: "
-        f"{', '.join(topics)}.\n" if topics else "Give each card a short 'topic' label (2-4 words).\n"
+@router.get("", response_model=list[schemas.MaterialOut])
+def list_materials(
+    study_space_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    study_space = _get_owned_study_space(study_space_id, db, current_user)
+    return (
+        db.query(models.Material)
+        .filter(models.Material.study_space_id == study_space.id)
+        .order_by(models.Material.created_at.desc())
+        .all()
     )
-    prompt = (
-        f"Create {count} flashcards for a university student, based ONLY on the material below. "
-        "Each card tests one idea: the 'front' is a clear question or a term, and the 'back' is a short, "
-        "accurate answer (1-3 sentences). Cover the material broadly; do not repeat ideas.\n"
-        f"{topic_hint}"
-        "Respond with ONLY valid JSON: "
-        '[{"front": "...", "back": "...", "topic": "..."}]\n\n'
-        f"MATERIAL:\n{material_text}"
-    )
-    try:
-        return clean_flashcards(_ask_json(prompt), count)
-    except Exception:
-        logger.exception("Flashcard generation failed")
-        return []
+
+
+@router.get("/{material_id}", response_model=schemas.MaterialOut)
+def get_material(
+    study_space_id: str,
+    material_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    return _get_owned_material(study_space_id, material_id, db, current_user)
