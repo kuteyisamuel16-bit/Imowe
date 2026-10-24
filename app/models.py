@@ -265,3 +265,19 @@ class MessageFeedback(Base):
     reason = Column(Text, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class PasswordResetToken(Base):
+    """
+    One-time password-reset link. Only a SHA-256 hash of the token is stored,
+    so a database leak can't be used to reset anyone's password.
+    """
+    __tablename__ = "password_reset_tokens"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False, index=True)
+    token_hash = Column(String(64), unique=True, index=True, nullable=False)
+
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
