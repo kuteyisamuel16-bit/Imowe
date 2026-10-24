@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Literal
 from pydantic import BaseModel, EmailStr, ConfigDict
 
 
@@ -124,6 +124,17 @@ class ChatMessageOut(BaseModel):
     role: str
     content: str
     created_at: datetime
+    feedback: Optional[str] = None  # "like" | "dislike" | None
+
+
+class FeedbackIn(BaseModel):
+    rating: Literal["like", "dislike", "none"]  # "none" clears an existing rating
+    reason: Optional[str] = None
+
+
+class FeedbackOut(BaseModel):
+    message_id: str
+    rating: Optional[str] = None
 
 # ---------- Quiz ----------
 
