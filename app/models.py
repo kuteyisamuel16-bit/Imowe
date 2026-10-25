@@ -389,3 +389,17 @@ class Deadline(Base):
     done = Column(Boolean, nullable=False, default=False)
     done_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class MaterialChapterSummary(Base):
+    """Chapter-by-chapter summary of one long material. Plain-string ids (no foreign keys)
+    so deleting a material or course is never blocked by it."""
+    __tablename__ = "material_chapter_summaries"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    material_id = Column(String(36), unique=True, nullable=False, index=True)
+    study_space_id = Column(String(36), nullable=False, index=True)
+    content = Column(Text, nullable=False)     # JSON list of {title, summary, key_points}
+    source_len = Column(Integer, nullable=False)  # length of the text it was made from, to spot changes
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
