@@ -344,3 +344,30 @@ class VideoLesson(Base):
     title = Column(String(200), nullable=False)
     content = Column(Text, nullable=False)  # JSON list of scenes
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Meeting(Base):
+    """A live audio study meeting. Joined with a short code; capped at max_participants."""
+    __tablename__ = "meetings"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    code = Column(String(8), unique=True, nullable=False, index=True)
+    host_id = Column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False, index=True)
+    title = Column(String(120), nullable=False)
+    study_space_id = Column(String(36), nullable=True)  # plain string: never blocks deleting a course
+    max_participants = Column(Integer, nullable=False, default=8)
+    status = Column(String(12), nullable=False, default="active")  # active | ended
+    created_at = Column(DateTime, default=datetime.utcnow)
+    ended_at = Column(DateTime, nullable=True)
+
+
+class MeetingParticipant(Base):
+    __tablename__ = "meeting_participants"
+    __table_args__ = (UniqueConstraint("meeting_id", "user_id", name="uq_meeting_user"),)
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    meeting_id = Column(UUID(as_uuid=False), ForeignKey("meetings.id"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False, index=True)
+    joined_at = Column(DateTime, default=datetime.utcnow)
+    last_seen = Column(DateTime, default=datetime.utcnow)   # refreshed by the app every ~20 seconds
+    left_at = Column(DateTime, nullable=True)
