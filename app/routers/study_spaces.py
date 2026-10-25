@@ -1,203 +1,338 @@
-import logging
-import os
-from typing import Optional
-
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import or_
-from sqlalchemy.orm import Session, joinedload
-
-from app.database import get_db
-from app.deps import get_current_user
-from app import models, schemas
-
-logger = logging.getLogger("imowe.study_spaces")
-
-router = APIRouter(prefix="/study-spaces", tags=["study-spaces"])
+from datetime import datetime, date
+from typing import Optional, Literal
+from pydantic import BaseModel, EmailStr, ConfigDict
 
 
-def _get_owned_study_space(study_space_id: str, db: Session, user: models.User) -> models.StudySpace:
-    study_space = (
-        db.query(models.StudySpace)
-        .options(joinedload(models.StudySpace.course))
-        .filter(models.StudySpace.id == study_space_id, models.StudySpace.user_id == user.id)
-        .first()
-    )
-    if not study_space:
-        raise HTTPException(status_code=404, detail="Study space not found.")
-    return study_space
+class SignUpRequest(BaseModel):
+    full_name: str
+    email: EmailStr
+    password: str
 
 
-@router.post("", response_model=schemas.StudySpaceOut, status_code=201)
-def add_course(
-    payload: schemas.CourseCreate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-):
-    course = models.Course(user_id=current_user.id, **payload.model_dump())
-    db.add(course)
-    db.flush()
-
-    study_space = models.StudySpace(user_id=current_user.id, course_id=course.id)
-    db.add(study_space)
-    db.commit()
-    db.refresh(study_space)
-    return study_space
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
 
 
-@router.get("", response_model=list[schemas.StudySpaceOut])
-def list_my_courses(
-    status_filter: Optional[str] = None,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-):
-    query = (
-        db.query(models.StudySpace)
-        .options(joinedload(models.StudySpace.course))
-        .filter(models.StudySpace.user_id == current_user.id)
-    )
-    if status_filter:
-        query = query.filter(models.StudySpace.status == status_filter)
-
-    return query.order_by(models.StudySpace.created_at.desc()).all()
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
 
 
-@router.get("/{study_space_id}", response_model=schemas.StudySpaceOut)
-def get_study_space(
-    study_space_id: str,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-):
-    return _get_owned_study_space(study_space_id, db, current_user)
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
 
 
-@router.patch("/{study_space_id}/progress", response_model=schemas.StudySpaceOut)
-def update_progress(
-    study_space_id: str,
-    payload: schemas.StudySpaceProgressUpdate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-):
-    study_space = _get_owned_study_space(study_space_id, db, current_user)
-
-    study_space.progress_percent = payload.progress_percent
-    if payload.next_up is not None:
-        study_space.next_up = payload.next_up
-
-    db.commit()
-    db.refresh(study_space)
-    return study_space
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
 
 
-@router.patch("/{study_space_id}/status", response_model=schemas.StudySpaceOut)
-def update_status(
-    study_space_id: str,
-    payload: schemas.StudySpaceStatusUpdate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-):
-    """Move a course between Current / Completed / Archived."""
-    study_space = _get_owned_study_space(study_space_id, db, current_user)
-    study_space.status = models.StudySpaceStatus(payload.status)
-    db.commit()
-    db.refresh(study_space)
-    return study_space
+class MessageResponse(BaseModel):
+    message: str
 
 
-def purge_study_space(db: Session, study_space: models.StudySpace) -> list[str]:
-    """
-    Permanently remove a Study Space and everything that hangs off it, in an
-    order that respects the foreign keys. Returns the uploaded-file paths so
-    the caller can delete them from disk after the commit succeeds.
-    """
-    sid = study_space.id
-    course_id = study_space.course_id
+class AcademicProfileOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
-    material_rows = db.query(models.Material.id, models.Material.file_path).filter(
-        models.Material.study_space_id == sid
-    ).all()
-    material_ids = [r[0] for r in material_rows]
-    file_paths = [r[1] for r in material_rows if r[1]]
-
-    thread_ids = [
-        r[0] for r in db.query(models.ChatThread.id).filter(
-            or_(
-                models.ChatThread.study_space_id == sid,
-                models.ChatThread.material_id.in_(material_ids) if material_ids else False,
-            )
-        ).all()
-    ]
-
-    # Assistant replies carry only a thread_id (no study_space_id), so match on
-    # the thread as well as the space and the materials.
-    msg_conditions = [models.AIInteraction.study_space_id == sid]
-    if thread_ids:
-        msg_conditions.append(models.AIInteraction.thread_id.in_(thread_ids))
-    if material_ids:
-        msg_conditions.append(models.AIInteraction.material_id.in_(material_ids))
-    message_ids = [r[0] for r in db.query(models.AIInteraction.id).filter(or_(*msg_conditions)).all()]
-
-    if message_ids:
-        db.query(models.MessageFeedback).filter(
-            models.MessageFeedback.message_id.in_(message_ids)
-        ).delete(synchronize_session=False)
-        db.query(models.AIInteraction).filter(
-            models.AIInteraction.id.in_(message_ids)
-        ).delete(synchronize_session=False)
-    if thread_ids:
-        db.query(models.ChatThread).filter(
-            models.ChatThread.id.in_(thread_ids)
-        ).delete(synchronize_session=False)
-
-    db.query(models.MaterialChunk).filter(models.MaterialChunk.study_space_id == sid).delete(synchronize_session=False)
-
-    # recordings point at the material they were made in - unlink before deleting
-    db.query(models.Material).filter(models.Material.study_space_id == sid).update(
-        {"linked_material_id": None}, synchronize_session=False
-    )
-    db.query(models.Material).filter(models.Material.study_space_id == sid).delete(synchronize_session=False)
-
-    for model in (
-        models.QuizAttemptAnswer,
-        models.QuizAttempt,
-        models.QuizQuestion,
-        models.MasteryRecord,
-        models.StudyEvent,
-        models.Flashcard,
-        models.Note,
-        models.CourseSummary,
-    ):
-        db.query(model).filter(model.study_space_id == sid).delete(synchronize_session=False)
-
-    db.query(models.StudySpace).filter(models.StudySpace.id == sid).delete(synchronize_session=False)
-
-    # the course goes too, unless some other Study Space still uses it
-    still_used = db.query(models.StudySpace.id).filter(models.StudySpace.course_id == course_id).first()
-    if not still_used:
-        db.query(models.Course).filter(models.Course.id == course_id).delete(synchronize_session=False)
-
-    return file_paths
+    institution: Optional[str] = None
+    programme: Optional[str] = None
+    level: int
+    xp: int
+    avatar_url: Optional[str] = None
 
 
-@router.delete("/{study_space_id}", status_code=204)
-def delete_study_space(
-    study_space_id: str,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-):
-    """Delete a course and all of its materials, chats, quizzes and progress. Irreversible."""
-    study_space = _get_owned_study_space(study_space_id, db, current_user)
-    try:
-        file_paths = purge_study_space(db, study_space)
-        db.commit()
-    except Exception:
-        db.rollback()
-        logger.exception("Deleting study space %s failed", study_space_id)
-        raise HTTPException(status_code=500, detail="Couldn't delete this course. Nothing was changed.")
+class AcademicProfileUpdate(BaseModel):
+    institution: Optional[str] = None
+    programme: Optional[str] = None
+    avatar_url: Optional[str] = None
 
-    # files go only after the database commit succeeded
-    for path in file_paths:
-        try:
-            os.remove(path)
-        except OSError:
-            pass
-    return None
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    full_name: str
+    email: EmailStr
+    created_at: datetime
+    academic_profile: Optional[AcademicProfileOut] = None
+
+
+class CourseCreate(BaseModel):
+    title: str
+    subtitle: Optional[str] = None
+    cover_color: Optional[str] = None
+    cover_image_url: Optional[str] = None
+
+
+class CourseOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    title: str
+    subtitle: Optional[str] = None
+    cover_image_url: Optional[str] = None
+
+
+class StudySpaceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    status: str
+    progress_percent: float
+    next_up: Optional[str] = None
+    course: CourseOut
+
+
+class StudySpaceProgressUpdate(BaseModel):
+    progress_percent: float
+    next_up: Optional[str] = None
+
+
+class StudySpaceStatusUpdate(BaseModel):
+    status: Literal["current", "completed", "archived"]
+
+
+class MaterialOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    filename: str
+    content_type: Optional[str] = None
+    material_type: str
+    status: str
+    extracted_topics: Optional[str] = None  # JSON-encoded list of strings
+    extracted_text: Optional[str] = None
+    linked_material_id: Optional[str] = None
+    created_at: datetime
+
+
+class RecordingCreate(BaseModel):
+    """A lecture recording, transcribed client-side (Web Speech API) and
+    sent up as plain text - no audio file involved."""
+    filename: str
+    transcript: str
+    linked_material_id: Optional[str] = None
+
+
+# ---------- AI Tutor ----------
+
+class ChatThreadOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    title: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ChatMessageIn(BaseModel):
+    message: str
+    study_space_id: Optional[str] = None
+    material_id: Optional[str] = None
+    thread_id: Optional[str] = None
+
+
+class ChatMessageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    thread_id: Optional[str] = None
+    role: str
+    content: str
+    created_at: datetime
+    feedback: Optional[str] = None  # "like" | "dislike" | None
+
+
+class FeedbackIn(BaseModel):
+    rating: Literal["like", "dislike", "none"]  # "none" clears an existing rating
+    reason: Optional[str] = None
+
+
+class FeedbackOut(BaseModel):
+    message_id: str
+    rating: Optional[str] = None
+
+# ---------- Quiz ----------
+
+class QuizGenerateRequest(BaseModel):
+    num_questions: int = 5
+
+
+class QuizQuestionOut(BaseModel):
+    """Sent before submission - correct_index is deliberately left out."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    question_text: str
+    options: list[str]
+
+
+class QuizAnswerIn(BaseModel):
+    question_id: str
+    selected_index: int
+
+
+class QuizSubmitRequest(BaseModel):
+    answers: list[QuizAnswerIn]
+
+
+class QuizReviewItem(BaseModel):
+    question_id: str
+    question_text: str
+    options: list[str]
+    correct_index: int
+    selected_index: Optional[int] = None
+    is_correct: bool
+
+
+class QuizSubmitResult(BaseModel):
+    score: int
+    total: int
+    review: list[QuizReviewItem]
+
+
+# ---------- Study tools: summary, flashcards, notes ----------
+
+class SummaryOut(BaseModel):
+    summary: Optional[dict] = None   # {overview, key_points, sections, key_terms}
+    updated_at: Optional[datetime] = None
+    stale: bool = False              # materials changed since this summary was made
+
+
+class FlashcardGenerateRequest(BaseModel):
+    count: int = 12
+
+
+class FlashcardReviewIn(BaseModel):
+    known: bool
+
+
+class FlashcardOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    front: str
+    back: str
+    topic: Optional[str] = None
+    times_known: int = 0
+    times_missed: int = 0
+    last_known: Optional[bool] = None
+
+
+class NoteIn(BaseModel):
+    title: Optional[str] = None
+    content: str
+    source: Literal["manual", "tutor"] = "manual"
+    source_message_id: Optional[str] = None
+
+
+class NoteUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+
+
+class NoteOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    title: str
+    content: str
+    source: str
+    source_message_id: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+# ---------- Video lessons ----------
+
+class VideoGenerateIn(BaseModel):
+    message_id: Optional[str] = None   # the tutor answer to teach (preferred)
+    text: Optional[str] = None         # used only when the answer has no saved id
+    question: Optional[str] = None
+
+
+class VideoSceneOut(BaseModel):
+    heading: str
+    bullets: list[str]
+    narration: str
+
+
+class VideoLessonOut(BaseModel):
+    id: str
+    title: str
+    scenes: list[VideoSceneOut]
+    created_at: Optional[datetime] = None
+    cached: bool = False
+
+
+# ---------- Study meetings ----------
+
+class MeetingCreateIn(BaseModel):
+    title: Optional[str] = None
+
+
+class MeetingJoinIn(BaseModel):
+    code: str
+
+
+class MeetingPerson(BaseModel):
+    user_id: str
+    name: str
+    is_host: bool = False
+
+
+class MeetingOut(BaseModel):
+    id: str
+    code: str
+    title: str
+    host_name: str
+    is_host: bool
+    max_participants: int
+    status: str
+
+
+class MeetingJoinOut(BaseModel):
+    meeting: MeetingOut
+    token: str
+    url: str
+    identity: str
+    participants: list[MeetingPerson]
+
+
+class MeetingPingOut(BaseModel):
+    status: str
+    participants: list[MeetingPerson]
+
+
+# ---------- Deadlines ----------
+
+class DeadlineIn(BaseModel):
+    title: str
+    kind: str = "assignment"
+    due_date: date
+    due_time: Optional[str] = None
+    notes: Optional[str] = None
+    study_space_id: Optional[str] = None
+
+
+class DeadlineUpdate(BaseModel):
+    title: Optional[str] = None
+    kind: Optional[str] = None
+    due_date: Optional[date] = None
+    due_time: Optional[str] = None     # "" clears it
+    notes: Optional[str] = None
+    study_space_id: Optional[str] = None  # "" unlinks the course
+    done: Optional[bool] = None
+
+
+class DeadlineOut(BaseModel):
+    id: str
+    title: str
+    kind: str
+    due_date: date
+    due_time: Optional[str] = None
+    notes: Optional[str] = None
+    study_space_id: Optional[str] = None
+    course_title: Optional[str] = None
+    done: bool = False
