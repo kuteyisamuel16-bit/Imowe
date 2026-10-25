@@ -222,3 +222,52 @@ def generate_video_script(answer_text: str, question: str, course_title: str | N
     except Exception:
         logger.exception("Video script generation failed")
         return None
+
+
+def generate_chapter_batch(sections: list[tuple[str, str]], course_title: str | None) -> list[dict] | None:
+    """Summarise a few consecutive sections of one document. sections = [(title_hint, text), ...].
+    Returns one dict per section, in order: {"title", "summary", "key_points"}."""
+    if not _client or not sections:
+        return None
+    where = f" for the course '{course_title}'" if course_title else ""
+    blocks = []
+    for i, (hint, body) in enumerate(sections):
+        blocks.append(f"=== SECTION {i} (heading found in the document: {hint or 'none'}) ===\n{body}")
+    prompt = (
+        f"You are summarising sections of a long study document{where} for a university student. "
+        "Use ONLY the text given; do not add facts.\n"
+        "For EACH section write: a clear 'title' (use the document's own heading when there is one, otherwise a short "
+        "descriptive title), a 'summary' of 2-4 plain sentences, and 3-5 'key_points' (short, self-contained takeaways).\n"
+        f"Respond with ONLY valid JSON, a list with exactly {len(sections)} items in the same order: "
+        '[{"index": 0, "title": "...", "summary": "...", "key_points": ["..."]}]\n\n'
+        + "\n\n".join(blocks)
+    )
+    try:
+        data = _ask_json(prompt)
+    except Exception:
+        logger.exception("Chapter summary batch failed")
+        return None
+    if isinstance(data, dict):
+        data = data.get("chapters") or data.get("sections") or []
+    if not isinstance(data, list):
+        return None
+    by_index = {}
+    for pos, item in enumerate(data):
+        if not isinstance(item, dict):
+            continue
+        idx = item.get("index", pos)
+        if not isinstance(idx, int) or not 0 <= idx < len(sections):
+            idx = pos if 0 <= pos < len(sections) else None
+        if idx is None or idx in by_index:
+            continue
+        summary = str(item.get("summary", "")).strip()[:900]
+        if not summary:
+            continue
+        by_index[idx] = {
+            "title": (str(item.get("title", "")).strip()[:140] or sections[idx][0] or f"Part {idx + 1}"),
+            "summary": summary,
+            "key_points": _strs(item.get("key_points"), 6, 220),
+        }
+    if len(by_index) < len(sections):
+        return [by_index.get(i) for i in range(len(sections))]  # None entries = missing, caller fills them
+    return [by_index[i] for i in range(len(sections))]
