@@ -264,3 +264,42 @@ class VideoLessonOut(BaseModel):
     scenes: list[VideoSceneOut]
     created_at: Optional[datetime] = None
     cached: bool = False
+
+
+# ---------- Study meetings ----------
+
+class MeetingCreateIn(BaseModel):
+    title: Optional[str] = None
+
+
+class MeetingJoinIn(BaseModel):
+    code: str
+
+
+class MeetingPerson(BaseModel):
+    user_id: str
+    name: str
+    is_host: bool = False
+
+
+class MeetingOut(BaseModel):
+    id: str
+    code: str
+    title: str
+    host_name: str
+    is_host: bool
+    max_participants: int
+    status: str
+
+
+class MeetingJoinOut(BaseModel):
+    meeting: MeetingOut
+    token: str
+    url: str
+    identity: str
+    participants: list[MeetingPerson]
+
+
+class MeetingPingOut(BaseModel):
+    status: str
+    participants: list[MeetingPerson]
