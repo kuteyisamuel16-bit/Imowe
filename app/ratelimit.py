@@ -109,6 +109,8 @@ narration_limit = user_limit("narration", (10, 60), (100, 24 * 3600), label="rea
 narration_summary_limit = user_limit("narration_summary", (5, 60), (30, 24 * 3600), label="audio summaries")
 summary_generate_limit = user_limit("summary", (3, 600), (20, 24 * 3600), label="summaries")
 video_generate_limit = user_limit("video_lesson", (3, 600), (15, 24 * 3600), label="video lessons")
+meeting_create_limit = user_limit("meeting_create", (5, 3600), (20, 24 * 3600), label="meetings")
+meeting_join_limit = user_limit("meeting_join", (30, 600), label="joining meetings")
 flashcard_generate_limit = user_limit("flashcards", (5, 600), (20, 24 * 3600), label="flashcard generation")
 upload_limit = user_limit("upload", (10, 3600), (40, 24 * 3600), label="uploads")
 signup_limit = ip_limit("signup", (20, 3600), label="sign-up")
