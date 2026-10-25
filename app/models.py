@@ -3,7 +3,7 @@ import enum
 from datetime import datetime
 
 from sqlalchemy import (
-    Column, String, Integer, Float, Boolean, ForeignKey, DateTime, Enum, Text, UniqueConstraint
+    Column, String, Integer, Float, Boolean, ForeignKey, DateTime, Date, Enum, Text, UniqueConstraint
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -371,3 +371,21 @@ class MeetingParticipant(Base):
     joined_at = Column(DateTime, default=datetime.utcnow)
     last_seen = Column(DateTime, default=datetime.utcnow)   # refreshed by the app every ~20 seconds
     left_at = Column(DateTime, nullable=True)
+
+
+class Deadline(Base):
+    """An assignment, test or exam with a due date. study_space_id is a plain string (no foreign key),
+    so deleting a course keeps the deadline and just unlinks it."""
+    __tablename__ = "deadlines"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False, index=True)
+    study_space_id = Column(String(36), nullable=True, index=True)
+    title = Column(String(200), nullable=False)
+    kind = Column(String(20), nullable=False, default="assignment")  # assignment | test | exam | other
+    due_date = Column(Date, nullable=False, index=True)
+    due_time = Column(String(5), nullable=True)                     # "HH:MM", local time, optional
+    notes = Column(Text, nullable=True)
+    done = Column(Boolean, nullable=False, default=False)
+    done_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
