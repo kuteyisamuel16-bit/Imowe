@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional, Literal
 from pydantic import BaseModel, EmailStr, ConfigDict
 
@@ -303,3 +303,49 @@ class MeetingJoinOut(BaseModel):
 class MeetingPingOut(BaseModel):
     status: str
     participants: list[MeetingPerson]
+
+
+# ---------- Deadlines ----------
+
+class DeadlineIn(BaseModel):
+    title: str
+    kind: str = "assignment"
+    due_date: date
+    due_time: Optional[str] = None
+    notes: Optional[str] = None
+    study_space_id: Optional[str] = None
+
+
+class DeadlineUpdate(BaseModel):
+    title: Optional[str] = None
+    kind: Optional[str] = None
+    due_date: Optional[date] = None
+    due_time: Optional[str] = None     # "" clears it
+    notes: Optional[str] = None
+    study_space_id: Optional[str] = None  # "" unlinks the course
+    done: Optional[bool] = None
+
+
+class DeadlineOut(BaseModel):
+    id: str
+    title: str
+    kind: str
+    due_date: date
+    due_time: Optional[str] = None
+    notes: Optional[str] = None
+    study_space_id: Optional[str] = None
+    course_title: Optional[str] = None
+    done: bool = False
+
+
+# ---------- Profile ----------
+
+class ProfileUpdateIn(BaseModel):
+    full_name: Optional[str] = None
+    institution: Optional[str] = None
+    programme: Optional[str] = None
+
+
+class ChangePasswordIn(BaseModel):
+    current_password: str
+    new_password: str
