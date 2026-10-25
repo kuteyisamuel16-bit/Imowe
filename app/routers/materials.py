@@ -21,7 +21,7 @@ UPLOAD_DIR = "uploaded_materials"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB per file
-MAX_STORED_CHARS = 50000  # keep DB rows sane; Course Memory chunks this text for retrieval
+MAX_STORED_CHARS = 200000  # about 100 pages. Course Memory chunks this text; chapter summaries read it all
 
 
 def _get_owned_study_space(study_space_id: str, db: Session, user: models.User) -> models.StudySpace:
@@ -45,6 +45,16 @@ def _get_owned_material(study_space_id: str, material_id: str, db: Session, user
     if not material:
         raise HTTPException(status_code=404, detail="Material not found.")
     return material
+
+
+def _sample_for_topics(text: str, size: int = 30000) -> str:
+    """Topics should reflect the whole document, not only its first pages: take the start, middle and end."""
+    text = text or ""
+    if len(text) <= size:
+        return text
+    third = size // 3
+    mid = len(text) // 2
+    return "\n\n".join([text[:third], text[mid - third // 2: mid + third // 2], text[-third:]])
 
 
 def _clean(text: str) -> str:
@@ -108,7 +118,7 @@ def upload_material(
 
     try:
         text = extract.extract_text(destination, ext)
-        topics = ai.extract_topics(text)
+        topics = ai.extract_topics(_sample_for_topics(text))
         material.extracted_text = text[:MAX_STORED_CHARS] if text else None
         material.extracted_topics = json.dumps(topics)
         material.status = models.MaterialStatus.processed if topics else models.MaterialStatus.uploaded
@@ -230,6 +240,7 @@ def delete_material(
             db.query(models.ChatThread).filter(models.ChatThread.id.in_(thread_ids)).delete(synchronize_session=False)
 
         db.query(models.MaterialChunk).filter(models.MaterialChunk.material_id == mid).delete(synchronize_session=False)
+        db.query(models.MaterialChapterSummary).filter(models.MaterialChapterSummary.material_id == mid).delete(synchronize_session=False)
         # recordings made inside this material keep existing, just unlinked
         db.query(models.Material).filter(models.Material.linked_material_id == mid).update(
             {"linked_material_id": None}, synchronize_session=False
