@@ -349,3 +349,17 @@ class ProfileUpdateIn(BaseModel):
 class ChangePasswordIn(BaseModel):
     current_password: str
     new_password: str
+
+
+# ---------- Chapter summaries ----------
+
+class ChapterOut(BaseModel):
+    title: str
+    summary: str
+    key_points: list[str] = []
+
+
+class ChaptersOut(BaseModel):
+    chapters: list[ChapterOut] = []
+    stale: bool = False
+    updated_at: Optional[datetime] = None
