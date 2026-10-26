@@ -271,3 +271,31 @@ def generate_chapter_batch(sections: list[tuple[str, str]], course_title: str | 
     if len(by_index) < len(sections):
         return [by_index.get(i) for i in range(len(sections))]  # None entries = missing, caller fills them
     return [by_index[i] for i in range(len(sections))]
+
+
+def generate_meeting_notes(transcript: str, title: str) -> dict | None:
+    """Short notes from the text chat of a study meeting. Audio is never recorded, so this is all there is."""
+    if not _client or not transcript.strip():
+        return None
+    prompt = (
+        f"Below is the text chat from a student study meeting called '{title}'. "
+        "Write brief notes based ONLY on what was written. Do not invent anything. "
+        "If the chat is only greetings or has nothing useful, return empty lists.\n"
+        "Respond with ONLY valid JSON in exactly this shape:\n"
+        '{"summary": "2-4 sentences on what was discussed", '
+        '"key_points": ["up to 8 short takeaways"], '
+        '"action_items": ["up to 6 things someone agreed to do, if any"]}\n\n'
+        f"CHAT:\n{transcript[:12000]}"
+    )
+    try:
+        data = _ask_json(prompt)
+    except Exception:
+        logger.exception("Meeting notes generation failed")
+        return None
+    if not isinstance(data, dict):
+        return None
+    return {
+        "summary": str(data.get("summary") or "").strip()[:1200],
+        "key_points": _strs(data.get("key_points"), 8),
+        "action_items": _strs(data.get("action_items"), 6),
+    }
