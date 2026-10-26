@@ -82,7 +82,7 @@ def _send_all(jobs: list[dict]) -> None:
         email_service.send_deadline_digest_email(j["email"], j["name"], j["items"])
 
 
-@router.post("/send-deadline-reminders")
+@router.api_route("/send-deadline-reminders", methods=["GET", "POST"])
 def send_deadline_reminders(background_tasks: BackgroundTasks, x_cron_secret: str | None = Header(default=None)):
     secret = os.getenv("CRON_SECRET") or ""
     if not secret or not x_cron_secret or not hmac.compare_digest(secret, x_cron_secret):
