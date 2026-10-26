@@ -242,6 +242,34 @@ def send_deadline_digest_email(to: str, full_name: str, items: list[dict]) -> bo
     return send_email(to, subject, html_body, text_body)
 
 
+def send_payment_receipt_email(to: str, full_name: str, plan_name: str, amount: int, currency: str, valid_until: str, reference: str) -> bool:
+    first = html.escape((full_name or "there").split()[0])
+    base = (_cfg("FRONTEND_URL") or "").rstrip("/")
+    safe_link = html.escape(base + "/", quote=True)
+    plan_h, ref_h, until_h = html.escape(plan_name), html.escape(reference), html.escape(valid_until)
+    html_body = f"""
+<div style="background:#101828;padding:32px 16px;font-family:Arial,Helvetica,sans-serif;">
+  <div style="max-width:460px;margin:0 auto;background:#16203A;border-radius:20px;padding:32px;color:#F8F7F2;">
+    <div style="font-size:22px;font-weight:800;letter-spacing:.5px;">IMOWE</div>
+    <h2 style="margin:22px 0 8px;font-size:20px;">Payment received, thank you!</h2>
+    <p style="color:#AEB6C9;line-height:1.55;margin:0 0 16px;">Hi {first}, your <strong style="color:#F8F7F2;">{plan_h}</strong> plan is active.</p>
+    <table role="presentation" width="100%" style="color:#AEB6C9;font-size:14px;margin-bottom:22px;" cellspacing="0" cellpadding="6">
+      <tr><td>Amount</td><td align="right" style="color:#F8F7F2;">{amount} {html.escape(currency)}</td></tr>
+      <tr><td>Valid until</td><td align="right" style="color:#F8F7F2;">{until_h}</td></tr>
+      <tr><td>Reference</td><td align="right" style="color:#F8F7F2;font-size:12px;">{ref_h}</td></tr>
+    </table>
+    <a href="{safe_link}" style="display:inline-block;background:#B8F34A;color:#101828;text-decoration:none;
+       font-weight:700;padding:13px 26px;border-radius:999px;">Open IMOWE</a>
+    <p style="color:#78829B;font-size:12.5px;line-height:1.5;margin:24px 0 0;">Keep this email as your receipt.</p>
+  </div>
+</div>"""
+    text_body = (
+        f"Hi {first},\n\nPayment received, thank you! Your {plan_name} plan is active.\n\n"
+        f"Amount: {amount} {currency}\nValid until: {valid_until}\nReference: {reference}\n\nOpen IMOWE: {base}/\n"
+    )
+    return send_email(to, "Your IMOWE payment receipt", html_body, text_body)
+
+
 def send_feedback_email(
     *, issue_text: str, user_name: str, user_email: str,
     question: str, answer: str, course: str | None, when: str,
