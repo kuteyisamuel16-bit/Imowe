@@ -415,3 +415,38 @@ class UserPrefs(Base):
     terms_version = Column(String(20), nullable=True)
     terms_accepted_at = Column(DateTime, nullable=True)
     last_reminder_on = Column(Date, nullable=True)
+
+
+class Subscription(Base):
+    """One row per student: which plan they are on and when it ends."""
+    __tablename__ = "subscriptions"
+
+    user_id = Column(String(36), primary_key=True)
+    plan = Column(String(20), nullable=False, default="trial")   # trial | basic | standard | full
+    starts_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+
+
+class Payment(Base):
+    __tablename__ = "payments"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    user_id = Column(String(36), nullable=False, index=True)
+    plan = Column(String(20), nullable=False)
+    amount = Column(Integer, nullable=False)                     # whole US dollars
+    currency = Column(String(8), nullable=False, default="USD")
+    tx_ref = Column(String(80), unique=True, nullable=False, index=True)
+    provider_txn_id = Column(String(40), nullable=True)
+    status = Column(String(12), nullable=False, default="pending")  # pending | paid | failed
+    created_at = Column(DateTime, default=datetime.utcnow)
+    paid_at = Column(DateTime, nullable=True)
+
+
+class UsageEvent(Base):
+    """Seconds of 'use' charged to a student (see entitlements.COST)."""
+    __tablename__ = "usage_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(36), nullable=False, index=True)
+    seconds = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
