@@ -403,3 +403,15 @@ class MaterialChapterSummary(Base):
     source_len = Column(Integer, nullable=False)  # length of the text it was made from, to spot changes
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class UserPrefs(Base):
+    """Per-user settings kept in their own table (plain-string user id, no foreign key)
+    so it is created automatically and never blocks deleting an account."""
+    __tablename__ = "user_prefs"
+
+    user_id = Column(String(36), primary_key=True)
+    email_reminders = Column(Boolean, nullable=False, default=True)
+    terms_version = Column(String(20), nullable=True)
+    terms_accepted_at = Column(DateTime, nullable=True)
+    last_reminder_on = Column(Date, nullable=True)
