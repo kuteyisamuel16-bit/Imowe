@@ -1,5 +1,5 @@
 """
-app/routers/reminders.py - the daily deadline reminder email.
+app/routers/reminders.py - the daily emails: deadline reminders, and 'your plan ends soon' notices.
 
 FastAPI Cloud has no built-in scheduler, so a free outside service (cron-job.org) calls this
 endpoint once a day. Set the environment variable CRON_SECRET to a long random string and send
@@ -18,7 +18,7 @@ from fastapi import APIRouter, BackgroundTasks, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app import models, email_service
+from app import models, email_service, entitlements
 
 router = APIRouter(prefix="/internal", tags=["internal"])
 
@@ -77,9 +77,45 @@ def _collect(db: Session, today: date) -> list[dict]:
     return jobs
 
 
-def _send_all(jobs: list[dict]) -> None:
+def _collect_expiring(db: Session) -> list[dict]:
+    """Plans (and free trials) ending within 3 days that we haven't emailed about yet."""
+    now = datetime.utcnow()
+    subs = (
+        db.query(models.Subscription)
+        .filter(models.Subscription.expires_at > now, models.Subscription.expires_at <= now + timedelta(days=WINDOW_DAYS))
+        .limit(MAX_USERS_PER_RUN)
+        .all()
+    )
+    jobs = []
+    for sub in subs:
+        already = (
+            db.query(models.ExpiryNotice)
+            .filter(models.ExpiryNotice.user_id == sub.user_id, models.ExpiryNotice.expires_at == sub.expires_at)
+            .first()
+        )
+        if already:
+            continue
+        user = db.query(models.User).filter(models.User.id == sub.user_id).first()
+        if not user or not user.email:
+            continue
+        db.add(models.ExpiryNotice(user_id=sub.user_id, expires_at=sub.expires_at))
+        secs = (sub.expires_at - now).total_seconds()
+        jobs.append({
+            "email": user.email, "name": user.full_name,
+            "plan_name": entitlements.TRIAL["name"] if sub.plan == "trial" else entitlements.PLANS.get(sub.plan, {}).get("name", sub.plan),
+            "is_trial": sub.plan == "trial",
+            "days": max(1, int(round(secs / 86400))),
+            "ends": sub.expires_at.strftime("%a %d %b %Y"),
+        })
+    db.commit()
+    return jobs
+
+
+def _send_all(jobs: list[dict], expiring: list[dict] | None = None) -> None:
     for j in jobs:
         email_service.send_deadline_digest_email(j["email"], j["name"], j["items"])
+    for x in expiring or []:
+        email_service.send_plan_expiry_email(x["email"], x["name"], x["plan_name"], x["is_trial"], x["days"], x["ends"])
 
 
 @router.api_route("/send-deadline-reminders", methods=["GET", "POST"])
@@ -90,7 +126,8 @@ def send_deadline_reminders(background_tasks: BackgroundTasks, x_cron_secret: st
     db = SessionLocal()
     try:
         jobs = _collect(db, _today())
+        expiring = _collect_expiring(db)
     finally:
         db.close()
-    background_tasks.add_task(_send_all, jobs)
-    return {"emails_queued": len(jobs)}
+    background_tasks.add_task(_send_all, jobs, expiring)
+    return {"emails_queued": len(jobs), "expiry_emails_queued": len(expiring)}
