@@ -1,5 +1,11 @@
 import hashlib
+import json
+import logging
+import os
 import secrets
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
@@ -12,6 +18,10 @@ from app import models, schemas, email_service, ratelimit
 from app.security import hash_password, verify_password, create_access_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+logger = logging.getLogger("imowe.auth")
+
+GOOGLE_TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo?id_token="
+GOOGLE_ISSUERS = ("accounts.google.com", "https://accounts.google.com")
 
 RESET_TOKEN_TTL_MINUTES = 30
 RESET_EMAIL_COOLDOWN_SECONDS = 60
@@ -29,7 +39,7 @@ def _hash_token(token: str) -> str:
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(ratelimit.signup_limit)],
 )
-def signup(payload: schemas.SignUpRequest, db: Session = Depends(get_db)):
+def signup(payload: schemas.SignUpRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     existing = db.query(models.User).filter(models.User.email == payload.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="An account with this email already exists.")
@@ -47,8 +57,60 @@ def signup(payload: schemas.SignUpRequest, db: Session = Depends(get_db)):
 
     db.commit()
 
+    background_tasks.add_task(email_service.send_welcome_email, user.email, user.full_name)
+
     token = create_access_token(subject=user.id)
     return schemas.TokenResponse(access_token=token)
+
+
+def _verify_google_credential(credential: str) -> dict:
+    """Asks Google to check the sign-in token, then checks it was issued for OUR app."""
+    client_id = (os.getenv("GOOGLE_CLIENT_ID") or "").strip()
+    if not client_id:
+        raise HTTPException(status_code=503, detail="Google sign-in isn't set up on the server yet.")
+    try:
+        url = GOOGLE_TOKENINFO_URL + urllib.parse.quote(credential.strip(), safe="")
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            info = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError:
+        raise HTTPException(status_code=401, detail="Google sign-in failed. Please try again.")
+    except Exception:
+        logger.exception("Google token check failed")
+        raise HTTPException(status_code=502, detail="Couldn't reach Google. Please try again.")
+
+    if info.get("aud") != client_id or info.get("iss") not in GOOGLE_ISSUERS:
+        raise HTTPException(status_code=401, detail="Google sign-in failed. Please try again.")
+    if str(info.get("email_verified")).lower() != "true" or not info.get("email"):
+        raise HTTPException(status_code=401, detail="Your Google email isn't verified.")
+    return info
+
+
+@router.post(
+    "/google",
+    response_model=schemas.TokenResponse,
+    dependencies=[Depends(ratelimit.google_login_limit)],
+)
+def google_login(payload: schemas.GoogleLoginRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    info = _verify_google_credential(payload.credential)
+    email = info["email"].strip().lower()
+
+    user = db.query(models.User).filter(func.lower(models.User.email) == email).first()
+    is_new = user is None
+    if is_new:
+        name = (info.get("name") or email.split("@")[0]).strip()[:150]
+        user = models.User(
+            full_name=name,
+            email=email,
+            # Google users have no password of their own; this one can't be guessed.
+            hashed_password=hash_password(secrets.token_urlsafe(32)),
+        )
+        db.add(user)
+        db.flush()
+        db.add(models.AcademicProfile(user_id=user.id, level=1, xp=0))
+        db.commit()
+        background_tasks.add_task(email_service.send_welcome_email, user.email, user.full_name)
+
+    return schemas.TokenResponse(access_token=create_access_token(subject=user.id))
 
 
 @router.post("/login", response_model=schemas.TokenResponse)
