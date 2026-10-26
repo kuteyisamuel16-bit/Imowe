@@ -9,6 +9,8 @@ from app.activity import log_event
 from app.mastery import update_mastery, weak_topics
 from app.ratelimit import quiz_generate_limit
 
+from app import entitlements
+
 router = APIRouter(prefix="/study-spaces/{study_space_id}/quiz", tags=["quiz"])
 
 
@@ -23,7 +25,7 @@ def _get_owned_study_space(study_space_id: str, db: Session, user: models.User) 
     return study_space
 
 
-@router.post("/generate", response_model=list[schemas.QuizQuestionOut], status_code=201, dependencies=[Depends(quiz_generate_limit)])
+@router.post("/generate", response_model=list[schemas.QuizQuestionOut], status_code=201, dependencies=[Depends(quiz_generate_limit), Depends(entitlements.gate("quiz"))])
 def generate_quiz(
     study_space_id: str,
     payload: schemas.QuizGenerateRequest,
