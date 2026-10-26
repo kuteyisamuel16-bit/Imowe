@@ -150,32 +150,96 @@ def send_welcome_email(to: str, full_name: str) -> bool:
     first = html.escape((full_name or "there").split()[0])
     base = (_cfg("FRONTEND_URL") or "").rstrip("/")
     safe_link = html.escape(base + "/", quote=True)
+    points = [
+        ("Learn your way", "Explore your study materials and get explanations tailored to your learning needs."),
+        ("Meet your AI Tutor", "Ask questions, explore concepts, and get help when you need it."),
+        ("Listen and watch", "Learn through audio, voice interactions, and video explanations."),
+        ("Track your progress", "Understand your strengths, identify areas for improvement, and stay on course."),
+        ("Learn together", "Connect with other learners and make your academic journey more engaging."),
+    ]
+    li = "".join(
+        f'<li style="margin-bottom:8px;"><strong style="color:#F8F7F2;">{html.escape(t)}:</strong> {html.escape(d)}</li>'
+        for t, d in points
+    )
+    p = 'color:#AEB6C9;line-height:1.6;margin:0 0 14px;'
     html_body = f"""
 <div style="background:#101828;padding:32px 16px;font-family:Arial,Helvetica,sans-serif;">
-  <div style="max-width:460px;margin:0 auto;background:#16203A;border-radius:20px;padding:32px;color:#F8F7F2;">
+  <div style="max-width:480px;margin:0 auto;background:#16203A;border-radius:20px;padding:32px;color:#F8F7F2;">
     <div style="font-size:22px;font-weight:800;letter-spacing:.5px;">IMOWE</div>
-    <h2 style="margin:22px 0 8px;font-size:20px;">Welcome, {first}!</h2>
-    <p style="color:#AEB6C9;line-height:1.55;margin:0 0 14px;">
-      Your account is ready. IMOWE is a smarter way to learn. Here is how to start:
-    </p>
-    <ul style="color:#AEB6C9;line-height:1.7;margin:0 0 22px;padding-left:20px;">
-      <li>Create a Study Space for a course and upload your notes or slides.</li>
-      <li>Ask the AI Tutor questions, or talk to it in a live voice call.</li>
-      <li>Make quizzes, flashcards and summaries from your own materials.</li>
-      <li>Add deadlines so nothing catches you off guard.</li>
-    </ul>
+    <h2 style="margin:22px 0 12px;font-size:20px;">Hi {first},</h2>
+    <p style="{p}">Welcome to IMOWE! \U0001F389 We're excited to have you here.</p>
+    <p style="{p}">IMOWE is built around one simple idea: learning should be smarter, more personal, and easier to navigate.</p>
+    <p style="{p}">Whether you're studying for an exam, trying to understand a difficult topic, or looking for a better way to manage your academic journey, IMOWE is here to support you.</p>
+    <p style="{p}">Here's what you can look forward to:</p>
+    <ul style="color:#AEB6C9;line-height:1.6;margin:0 0 18px;padding-left:20px;">{li}</ul>
+    <p style="{p}">We believe learning is more than getting answers. It's about understanding, growing, and becoming better every day. And that's what we want to help you do.</p>
+    <p style="{p}">Ready to get started? Log in to IMOWE, explore your learning space, and take your first step toward a smarter learning experience.</p>
+    <a href="{safe_link}" style="display:inline-block;background:#B8F34A;color:#101828;text-decoration:none;
+       font-weight:700;padding:13px 26px;border-radius:999px;margin:6px 0 20px;">Open IMOWE</a>
+    <p style="{p}">We're glad you're here. Welcome to the community!</p>
+    <p style="color:#F8F7F2;line-height:1.5;margin:18px 0 0;">Warm regards,<br><strong>The IMOWE Team</strong><br>
+      <span style="color:#B8F34A;">A smarter way to learn.</span></p>
+  </div>
+</div>"""
+    text_lines = "\n".join(f"- {t}: {d}" for t, d in points)
+    text_body = (
+        f"Hi {first},\n\nWelcome to IMOWE! We're excited to have you here.\n\n"
+        "IMOWE is built around one simple idea: learning should be smarter, more personal, and easier to navigate.\n\n"
+        "Whether you're studying for an exam, trying to understand a difficult topic, or looking for a better way to "
+        "manage your academic journey, IMOWE is here to support you.\n\n"
+        f"Here's what you can look forward to:\n\n{text_lines}\n\n"
+        "We believe learning is more than getting answers. It's about understanding, growing, and becoming better every day. "
+        "And that's what we want to help you do.\n\n"
+        f"Ready to get started? Log in to IMOWE, explore your learning space, and take your first step toward a smarter learning experience: {base}/\n\n"
+        "We're glad you're here. Welcome to the community!\n\nWarm regards,\nThe IMOWE Team\nA smarter way to learn.\n"
+    )
+    return send_email(to, "Welcome to IMOWE \U0001F389", html_body, text_body)
+
+
+def send_deadline_digest_email(to: str, full_name: str, items: list[dict]) -> bool:
+    """items: dicts with title, kind, days (negative = overdue), due (text), time (HH:MM or None)."""
+    first = html.escape((full_name or "there").split()[0])
+    base = (_cfg("FRONTEND_URL") or "").rstrip("/")
+    safe_link = html.escape(base + "/", quote=True)
+
+    def when(d: int) -> str:
+        if d < 0:
+            return f"{abs(d)} day{'s' if abs(d) != 1 else ''} overdue"
+        return "today" if d == 0 else "tomorrow" if d == 1 else f"in {d} days"
+
+    def label(i: dict) -> str:
+        return f"{i['title']} ({i['kind']}) - " + (when(i['days']) if i['days'] < 0 else f"due {when(i['days'])}") + f", {i['due']}" + (f" at {i['time']}" if i.get("time") else "")
+
+    rows = "".join(
+        f'<tr><td style="padding:10px 0;border-bottom:1px solid #26304D;">'
+        f'<div style="color:#F8F7F2;font-weight:700;">{html.escape(i["title"])}'
+        f' <span style="color:#78829B;font-weight:400;font-size:12.5px;">{html.escape(i["kind"])}</span></div>'
+        f'<div style="color:{"#FF8A7A" if i["days"] < 0 else "#B8F34A" if i["days"] <= 1 else "#AEB6C9"};font-size:13.5px;margin-top:3px;">'
+        f'{"" if i["days"] < 0 else "Due "}{when(i["days"])} &middot; {html.escape(i["due"])}'
+        f'{(" at " + html.escape(i["time"])) if i.get("time") else ""}</div></td></tr>'
+        for i in items
+    )
+    n_soon = sum(1 for i in items if 0 <= i["days"] <= 3)
+    subject = f"Heads up: {n_soon} deadline{'s' if n_soon != 1 else ''} coming up"
+    html_body = f"""
+<div style="background:#101828;padding:32px 16px;font-family:Arial,Helvetica,sans-serif;">
+  <div style="max-width:480px;margin:0 auto;background:#16203A;border-radius:20px;padding:32px;color:#F8F7F2;">
+    <div style="font-size:22px;font-weight:800;letter-spacing:.5px;">IMOWE</div>
+    <h2 style="margin:22px 0 8px;font-size:20px;">Hi {first}, here's what's coming up</h2>
+    <p style="color:#AEB6C9;line-height:1.55;margin:0 0 14px;">A quick look at your deadlines so nothing catches you off guard.</p>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:22px;">{rows}</table>
     <a href="{safe_link}" style="display:inline-block;background:#B8F34A;color:#101828;text-decoration:none;
        font-weight:700;padding:13px 26px;border-radius:999px;">Open IMOWE</a>
     <p style="color:#78829B;font-size:12.5px;line-height:1.5;margin:24px 0 0;">
-      Just reply to this email if you need help.
+      You can turn these emails off any time in IMOWE under Profile &gt; Settings.
     </p>
   </div>
 </div>"""
     text_body = (
-        f"Welcome to IMOWE, {first}!\n\nYour account is ready. Create a Study Space, upload your "
-        f"materials and start learning with the AI Tutor.\n\nOpen IMOWE: {base}/\n"
+        f"Hi {first},\n\nHere's what's coming up:\n\n" + "\n".join("- " + label(i) for i in items)
+        + f"\n\nOpen IMOWE: {base}/\n\nTurn these emails off in Profile > Settings.\n"
     )
-    return send_email(to, "Welcome to IMOWE", html_body, text_body)
+    return send_email(to, subject, html_body, text_body)
 
 
 def send_feedback_email(
