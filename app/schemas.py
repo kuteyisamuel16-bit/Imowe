@@ -7,6 +7,7 @@ class SignUpRequest(BaseModel):
     full_name: str
     email: EmailStr
     password: str
+    accept_terms: bool = False
 
 
 class LoginRequest(BaseModel):
@@ -16,6 +17,7 @@ class LoginRequest(BaseModel):
 
 class GoogleLoginRequest(BaseModel):
     credential: str
+    accept_terms: bool = False
 
 
 class TokenResponse(BaseModel):
