@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import Base, engine
 from app.config import settings
-from app.routers import auth, users, courses, study_spaces, materials, ai_tutor, quiz, narration, analytics, study_tools, video_lessons, meetings, deadlines, account, chapters, prefs, reminders
+from app.routers import auth, users, courses, study_spaces, materials, ai_tutor, quiz, narration, analytics, study_tools, video_lessons, meetings, deadlines, account, chapters, prefs, reminders, billing
 from app import migrations_lite
 
 Base.metadata.create_all(bind=engine)
@@ -40,6 +40,7 @@ app.include_router(account.router)
 app.include_router(chapters.router)
 app.include_router(prefs.router)
 app.include_router(reminders.router)
+app.include_router(billing.router)
 
 
 @app.get("/health")
