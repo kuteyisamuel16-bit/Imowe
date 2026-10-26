@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app import models, schemas, email_service, ratelimit
+from app.routers.prefs import record_terms_acceptance
 from app.security import hash_password, verify_password, create_access_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -54,6 +55,8 @@ def signup(payload: schemas.SignUpRequest, background_tasks: BackgroundTasks, db
 
     profile = models.AcademicProfile(user_id=user.id, level=1, xp=0)
     db.add(profile)
+    if payload.accept_terms:
+        record_terms_acceptance(db, user.id)
 
     db.commit()
 
@@ -107,6 +110,8 @@ def google_login(payload: schemas.GoogleLoginRequest, background_tasks: Backgrou
         db.add(user)
         db.flush()
         db.add(models.AcademicProfile(user_id=user.id, level=1, xp=0))
+        if payload.accept_terms:
+            record_terms_acceptance(db, user.id)
         db.commit()
         background_tasks.add_task(email_service.send_welcome_email, user.email, user.full_name)
 
