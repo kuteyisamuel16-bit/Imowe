@@ -450,3 +450,24 @@ class UsageEvent(Base):
     user_id = Column(String(36), nullable=False, index=True)
     seconds = Column(Integer, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class MeetingMessage(Base):
+    """A chat message sent during a study meeting. Plain-string ids (no foreign keys)."""
+    __tablename__ = "meeting_messages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    meeting_id = Column(String(36), nullable=False, index=True)
+    user_id = Column(String(36), nullable=False)
+    name = Column(String(150), nullable=False)
+    text = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ExpiryNotice(Base):
+    """Remembers that we already emailed this student about this plan ending, so it is sent once."""
+    __tablename__ = "expiry_notices"
+
+    user_id = Column(String(36), primary_key=True)
+    expires_at = Column(DateTime, primary_key=True)
+    sent_at = Column(DateTime, default=datetime.utcnow)
