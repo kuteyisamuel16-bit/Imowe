@@ -16,6 +16,8 @@ from app.ratelimit import summary_generate_limit, flashcard_generate_limit
 
 logger = logging.getLogger("imowe.study_tools")
 
+from app import entitlements
+
 router = APIRouter(prefix="/study-spaces/{study_space_id}", tags=["study-tools"])
 
 MAX_AI_CHARS = 30000  # how much course text is sent to Gemini in one go
@@ -90,7 +92,7 @@ def get_summary(
     )
 
 
-@router.post("/summary/generate", response_model=schemas.SummaryOut, dependencies=[Depends(summary_generate_limit)])
+@router.post("/summary/generate", response_model=schemas.SummaryOut, dependencies=[Depends(summary_generate_limit), Depends(entitlements.gate("summary"))])
 def generate_summary(
     study_space_id: str,
     db: Session = Depends(get_db),
@@ -145,7 +147,7 @@ def list_flashcards(
     "/flashcards/generate",
     response_model=list[schemas.FlashcardOut],
     status_code=201,
-    dependencies=[Depends(flashcard_generate_limit)],
+    dependencies=[Depends(flashcard_generate_limit), Depends(entitlements.gate("flashcards"))],
 )
 def generate_flashcards(
     study_space_id: str,
