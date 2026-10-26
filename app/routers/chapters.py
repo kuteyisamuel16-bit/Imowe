@@ -21,6 +21,8 @@ from app.ratelimit import summary_generate_limit
 
 logger = logging.getLogger("imowe.chapters")
 
+from app import entitlements
+
 router = APIRouter(prefix="/study-spaces/{study_space_id}/materials/{material_id}/chapters", tags=["chapters"])
 
 MIN_CHARS = 6000          # shorter than this and a normal read-through is easier
@@ -128,7 +130,7 @@ def get_chapters(
     return _out(row, material)
 
 
-@router.post("/generate", response_model=schemas.ChaptersOut, dependencies=[Depends(summary_generate_limit)])
+@router.post("/generate", response_model=schemas.ChaptersOut, dependencies=[Depends(summary_generate_limit), Depends(entitlements.gate("chapters"))])
 def generate_chapters(
     study_space_id: str,
     material_id: str,
