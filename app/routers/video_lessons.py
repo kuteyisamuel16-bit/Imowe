@@ -18,6 +18,8 @@ from app.ratelimit import video_generate_limit
 
 logger = logging.getLogger("imowe.video")
 
+from app import entitlements
+
 router = APIRouter(prefix="/video-lessons", tags=["video-lessons"])
 
 
@@ -31,7 +33,7 @@ def _out(lesson: models.VideoLesson, cached: bool) -> schemas.VideoLessonOut:
     )
 
 
-@router.post("/generate", response_model=schemas.VideoLessonOut, dependencies=[Depends(video_generate_limit)])
+@router.post("/generate", response_model=schemas.VideoLessonOut, dependencies=[Depends(video_generate_limit), Depends(entitlements.gate("video"))])
 def generate_lesson(
     payload: schemas.VideoGenerateIn,
     db: Session = Depends(get_db),
