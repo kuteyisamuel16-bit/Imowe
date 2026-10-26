@@ -146,6 +146,38 @@ def send_password_reset_email(to: str, full_name: str, link: str) -> bool:
     return send_email(to, "Reset your IMOWE password", html_body, text_body)
 
 
+def send_welcome_email(to: str, full_name: str) -> bool:
+    first = html.escape((full_name or "there").split()[0])
+    base = (_cfg("FRONTEND_URL") or "").rstrip("/")
+    safe_link = html.escape(base + "/", quote=True)
+    html_body = f"""
+<div style="background:#101828;padding:32px 16px;font-family:Arial,Helvetica,sans-serif;">
+  <div style="max-width:460px;margin:0 auto;background:#16203A;border-radius:20px;padding:32px;color:#F8F7F2;">
+    <div style="font-size:22px;font-weight:800;letter-spacing:.5px;">IMOWE</div>
+    <h2 style="margin:22px 0 8px;font-size:20px;">Welcome, {first}!</h2>
+    <p style="color:#AEB6C9;line-height:1.55;margin:0 0 14px;">
+      Your account is ready. IMOWE is a smarter way to learn. Here is how to start:
+    </p>
+    <ul style="color:#AEB6C9;line-height:1.7;margin:0 0 22px;padding-left:20px;">
+      <li>Create a Study Space for a course and upload your notes or slides.</li>
+      <li>Ask the AI Tutor questions, or talk to it in a live voice call.</li>
+      <li>Make quizzes, flashcards and summaries from your own materials.</li>
+      <li>Add deadlines so nothing catches you off guard.</li>
+    </ul>
+    <a href="{safe_link}" style="display:inline-block;background:#B8F34A;color:#101828;text-decoration:none;
+       font-weight:700;padding:13px 26px;border-radius:999px;">Open IMOWE</a>
+    <p style="color:#78829B;font-size:12.5px;line-height:1.5;margin:24px 0 0;">
+      Just reply to this email if you need help.
+    </p>
+  </div>
+</div>"""
+    text_body = (
+        f"Welcome to IMOWE, {first}!\n\nYour account is ready. Create a Study Space, upload your "
+        f"materials and start learning with the AI Tutor.\n\nOpen IMOWE: {base}/\n"
+    )
+    return send_email(to, "Welcome to IMOWE", html_body, text_body)
+
+
 def send_feedback_email(
     *, issue_text: str, user_name: str, user_email: str,
     question: str, answer: str, course: str | None, when: str,
