@@ -109,26 +109,32 @@ def add_usage(db: Session, user_id: str, seconds: int) -> None:
     db.commit()
 
 
+def ensure_allowed(db: Session, user_id: str) -> None:
+    """Raises 402 if billing is enforced and this student has no usable plan or hours."""
+    sub = get_subscription(db, user_id)
+    if not enforced():
+        return
+    now = datetime.utcnow()
+    if sub.expires_at <= now:
+        raise HTTPException(status_code=402, detail={
+            "code": "subscription_required",
+            "msg": "Your free trial has ended. Choose a plan to keep learning." if sub.plan == "trial"
+                   else "Your plan has ended. Renew to keep using IMOWE.",
+        })
+    lim = limit_seconds(sub)
+    if lim is not None and used_seconds(db, user_id, window_start(sub, now)) >= lim:
+        raise HTTPException(status_code=402, detail={
+            "code": "usage_limit",
+            "msg": "You've used all your hours for now. Upgrade your plan or wait for your hours to reset.",
+        })
+
+
 def gate(kind: str):
     """Use as: dependencies=[Depends(entitlements.gate("tutor"))] on an AI route."""
     cost = COST[kind]
 
     def dependency(db: Session = Depends(get_db), user: models.User = Depends(get_current_user)):
-        sub = get_subscription(db, user.id)
-        if enforced():
-            now = datetime.utcnow()
-            if sub.expires_at <= now:
-                raise HTTPException(status_code=402, detail={
-                    "code": "subscription_required",
-                    "msg": "Your free trial has ended. Choose a plan to keep learning." if sub.plan == "trial"
-                           else "Your plan has ended. Renew to keep using IMOWE.",
-                })
-            lim = limit_seconds(sub)
-            if lim is not None and used_seconds(db, user.id, window_start(sub, now)) >= lim:
-                raise HTTPException(status_code=402, detail={
-                    "code": "usage_limit",
-                    "msg": "You've used all your hours for now. Upgrade your plan or wait for your hours to reset.",
-                })
+        ensure_allowed(db, user.id)
         add_usage(db, user.id, cost)
 
     return dependency
