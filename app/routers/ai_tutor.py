@@ -18,6 +18,8 @@ from app.config import settings
 
 logger = logging.getLogger("imowe.ai_tutor")
 
+from app import entitlements
+
 router = APIRouter(prefix="/ai-tutor", tags=["ai-tutor"])
 
 client = genai.Client(
@@ -423,7 +425,7 @@ def _raise_for_gemini_error(e: Exception):
     raise HTTPException(status_code=502, detail=f"AI Tutor request failed: {e}")
 
 
-@router.post("/chat", response_model=schemas.ChatMessageOut, dependencies=[Depends(tutor_limit)])
+@router.post("/chat", response_model=schemas.ChatMessageOut, dependencies=[Depends(tutor_limit), Depends(entitlements.gate("tutor"))])
 async def chat(
     payload: schemas.ChatMessageIn,
     db: Session = Depends(get_db),
@@ -465,7 +467,7 @@ async def chat(
     return assistant_msg
 
 
-@router.post("/chat/stream", dependencies=[Depends(tutor_limit)])
+@router.post("/chat/stream", dependencies=[Depends(tutor_limit), Depends(entitlements.gate("tutor"))])
 async def chat_stream(
     payload: schemas.ChatMessageIn,
     db: Session = Depends(get_db),
