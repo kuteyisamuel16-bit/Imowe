@@ -117,5 +117,6 @@ upload_limit = user_limit("upload", (10, 3600), (40, 24 * 3600), label="uploads"
 signup_limit = ip_limit("signup", (20, 3600), label="sign-up")
 google_login_limit = ip_limit("google_login", (20, 600), label="Google sign-in")
 prefs_limit = user_limit("prefs", (30, 600), label="saving settings")
+billing_limit = user_limit("billing", (10, 600), (40, 24 * 3600), label="payments")
 forgot_password_limit = ip_limit("forgot_password", (5, 3600), label="password reset")
 LOGIN_RULES: list[Rule] = [(8, 300)]  # per IP + email, checked inside the login route
