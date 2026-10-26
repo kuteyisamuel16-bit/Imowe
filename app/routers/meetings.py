@@ -35,6 +35,8 @@ except Exception:  # pragma: no cover
 
 logger = logging.getLogger("imowe.meetings")
 
+from app import entitlements
+
 router = APIRouter(prefix="/meetings", tags=["meetings"])
 
 MAX_PARTICIPANTS = 8
@@ -45,6 +47,18 @@ CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # no 0/O/1/I/L, easy to read 
 
 def _cfg(name: str):
     return os.getenv(name) or (getattr(settings, name, None) if settings else None) or None
+
+
+def _ws_url(url: str) -> str:
+    """LiveKit shows the project address as https://... in some places and wss://... in others; the browser needs wss://."""
+    url = (url or "").strip().rstrip("/")
+    if url.startswith("https://"):
+        return "wss://" + url[len("https://"):]
+    if url.startswith("http://"):
+        return "ws://" + url[len("http://"):]
+    if "://" not in url:
+        return "wss://" + url
+    return url
 
 
 def _b64(raw: bytes) -> str:
@@ -117,7 +131,7 @@ def _get_meeting(db: Session, meeting_id: str) -> models.Meeting:
     return meeting
 
 
-@router.post("", response_model=schemas.MeetingOut, dependencies=[Depends(meeting_create_limit)])
+@router.post("", response_model=schemas.MeetingOut, dependencies=[Depends(meeting_create_limit), Depends(entitlements.gate("meeting"))])
 def create_meeting(
     payload: schemas.MeetingCreateIn,
     db: Session = Depends(get_db),
@@ -138,7 +152,7 @@ def create_meeting(
     raise HTTPException(status_code=500, detail="Couldn't create a meeting code. Please try again.")
 
 
-@router.post("/join", response_model=schemas.MeetingJoinOut, dependencies=[Depends(meeting_join_limit)])
+@router.post("/join", response_model=schemas.MeetingJoinOut, dependencies=[Depends(meeting_join_limit), Depends(entitlements.gate("meeting"))])
 def join_meeting(
     payload: schemas.MeetingJoinIn,
     db: Session = Depends(get_db),
@@ -186,7 +200,7 @@ def join_meeting(
     return schemas.MeetingJoinOut(
         meeting=_meeting_out(db, meeting, current_user),
         token=token,
-        url=url,
+        url=_ws_url(url),
         identity=current_user.id,
         participants=_people(db, meeting),
     )
@@ -208,6 +222,7 @@ def ping_meeting(
     if mine and meeting.status == "active" and mine.left_at is None:
         mine.last_seen = datetime.utcnow()
         db.commit()
+        entitlements.add_usage(db, current_user.id, entitlements.COST["meeting_ping"])
     return schemas.MeetingPingOut(status=meeting.status, participants=_people(db, meeting))
 
 
